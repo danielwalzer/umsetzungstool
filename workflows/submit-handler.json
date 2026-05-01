@@ -1,0 +1,322 @@
+{
+  "name": "Umsetzungstool — Submit Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "submit-form",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "node-webhook-001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 400],
+      "webhookId": "umsetzungstool-submit-form",
+      "notes": "POST /webhook/submit-form — empfängt das Webform-Payload. allowedOrigins:'*' wickelt CORS-Preflight ab; im Live-Betrieb auf https://umsetzung.result-lt.de eingrenzen.\n\nErwartetes Body-Schema (von index.html):\n{\n  workshop_id, participant_name, participant_email, participant_phone|null,\n  vorhaben_6w, naechster_schritt_72h,\n  lifo_interest: 'ja'|'nein', lifo_staerke: null, consent: true\n}"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://cloud.seatable.io/api/v2.1/dtable/app-access-token/",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "node-token-002",
+      "name": "Get Base Access Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "{{SEATABLE_CRED_ID}}",
+          "name": "SeaTable API Token (Header Auth)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cloud.seatable.io/api-gateway/api/v2/dtables/36f34c52-dcdd-49a6-b414-976465d26ee4/sql/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $('Get Base Access Token').item.json.access_token }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"sql\": \"SELECT _id, Name, Datum, LifoVerwendet, Trainer FROM Workshops WHERE _id = '{{ ($('Webhook').item.json.body.workshop_id || '').replace(/[^A-Za-z0-9_-]/g, '') }}' LIMIT 1\",\n  \"convert_keys\": true\n}",
+        "options": {}
+      },
+      "id": "node-workshop-003",
+      "name": "Query Workshop",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 400],
+      "notes": "Lädt den Workshop für Datum + Trainer-Link. Kein Status='active'-Filter, damit auch nachträgliche Submissions auf inzwischen archivierte Workshops nicht verloren gehen (z.B. wenn jemand den QR-Code 2 Monate später scannt)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cloud.seatable.io/api-gateway/api/v2/dtables/36f34c52-dcdd-49a6-b414-976465d26ee4/sql/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $('Get Base Access Token').item.json.access_token }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"sql\": \"SELECT _id, Name, Email, FotoUrl, SignatureHtml FROM Trainer LIMIT 200\",\n  \"convert_keys\": true\n}",
+        "options": {}
+      },
+      "id": "node-trainers-004",
+      "name": "Query Trainer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 400],
+      "notes": "Lädt alle Trainer als Lookup. Code-Node greift dann den richtigen via Workshop.Trainer[0]."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cloud.seatable.io/api-gateway/api/v2/dtables/36f34c52-dcdd-49a6-b414-976465d26ee4/rows/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $('Get Base Access Token').item.json.access_token }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  table_name: 'Submissions',\n  rows: [{\n    Workshop:            [ $('Query Workshop').first().json.results[0]._id ],\n    TeilnehmerName:      $('Webhook').item.json.body.participant_name,\n    Email:               $('Webhook').item.json.body.participant_email,\n    Telefon:             $('Webhook').item.json.body.participant_phone || '',\n    Vorhaben6W:          $('Webhook').item.json.body.vorhaben_6w,\n    NaechsterSchritt72h: $('Webhook').item.json.body.naechster_schritt_72h,\n    LifoInteresse:       $('Webhook').item.json.body.lifo_interest,\n    LifoStaerke:         $('Webhook').item.json.body.lifo_staerke || ''\n  }]\n}) }}",
+        "options": {}
+      },
+      "id": "node-create-submission-005",
+      "name": "Create Submission Row",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 400],
+      "notes": "Legt die Submission in SeaTable an. Workshop-Link wird als Single-Element-Array übergeben (SeaTable-Multi-Link-Konvention). HubspotContactId wird in Schritt 9 nachgetragen.\n\nAntwort enthält die neue row_id — wird im nächsten Code-Node aus row_ids[0] oder _id gelesen."
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.hubapi.com/crm/v3/objects/contacts/{{ encodeURIComponent($('Webhook').item.json.body.participant_email) }}?idProperty=email",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify((function(){\n  const fullName = ($('Webhook').item.json.body.participant_name || '').trim();\n  const parts = fullName.split(/\\s+/).filter(Boolean);\n  const firstname = parts.length >= 2 ? parts.slice(0, -1).join(' ') : fullName;\n  const lastname  = parts.length >= 2 ? parts[parts.length - 1] : '';\n  const props = {\n    email:     $('Webhook').item.json.body.participant_email,\n    firstname: firstname,\n    lastname:  lastname\n  };\n  const phone = $('Webhook').item.json.body.participant_phone;\n  if (phone) props.phone = phone;\n  return { properties: props };\n})()) }}",
+        "options": {}
+      },
+      "id": "node-hs-upsert-006",
+      "name": "HubSpot Upsert Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "{{HUBSPOT_CRED_ID}}",
+          "name": "HubSpot Private App Token (Header Auth: 'Authorization: Bearer <HUBSPOT_PRIVATE_APP_TOKEN>')"
+        }
+      },
+      "notes": "Upsert-Pattern via PATCH + idProperty=email. Updated nur Standard-Properties (firstname/lastname/phone) — keine Custom-Properties (Note-Strategie statt Property-Update, siehe setup/hubspot-note-template.md).\n\nName-Split-Heuristik: 'Anna Köhler' → firstname='Anna', lastname='Köhler'. 'Anna von der Mühlen' → firstname='Anna von der', lastname='Mühlen'. Single-Word ('Madonna') → firstname=full, lastname=''."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Baut den Note-Body aus Workshop + Trainer + Submission-Daten.\n// Format gemäß setup/hubspot-note-template.md.\n\nconst body     = $('Webhook').item.json.body;\nconst workshop = $('Query Workshop').first().json.results[0];\nconst trainers = $('Query Trainer').first().json.results;\n\n// Trainer-Lookup über den Multi-Link\nfunction firstLinkedId(link) {\n  if (!Array.isArray(link) || link.length === 0) return null;\n  const first = link[0];\n  if (typeof first === 'string') return first;\n  if (first && typeof first === 'object' && first.row_id) return first.row_id;\n  return null;\n}\nconst trainerId = firstLinkedId(workshop.Trainer);\nconst trainer   = trainerId ? trainers.find(t => t._id === trainerId) : null;\nconst trainerName = trainer ? (trainer.Name || '') : '';\n\n// Datum DD.MM.YYYY (SeaTable liefert ISO 'YYYY-MM-DD')\nfunction formatDatum(iso) {\n  if (!iso) return '';\n  const m = String(iso).match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n  if (!m) return iso;\n  return `${m[3]}.${m[2]}.${m[1]}`;\n}\nconst datum = formatDatum(workshop.Datum);\n\nconst noteBody = [\n  `${workshop.Name || '—'} – ${datum}`,\n  trainerName ? `Trainer: ${trainerName}` : '',\n  '',\n  'Vorhaben (6 Wochen):',\n  body.vorhaben_6w || '—',\n  '',\n  'Nächster Schritt (72h):',\n  body.naechster_schritt_72h || '—',\n  '',\n  `LIFO-Interesse: ${body.lifo_interest || '—'}`,\n  `LIFO-Stärke: ${body.lifo_staerke || '—'}`\n].filter(line => line !== null).join('\\n');\n\nreturn [{ json: {\n  note_body: noteBody,\n  hs_timestamp: new Date().toISOString(),\n  trainer_name: trainerName,\n  trainer_email: trainer ? (trainer.Email || '') : '',\n  trainer_photo: trainer ? (trainer.FotoUrl || '') : '',\n  trainer_signature: trainer ? (trainer.SignatureHtml || '') : '',\n  workshop_name: workshop.Name || '',\n  workshop_datum: workshop.Datum || '',\n  workshop_lifo_verwendet: !!workshop.LifoVerwendet\n} }];"
+      },
+      "id": "node-build-note-007",
+      "name": "Build Note Body + Workshop-Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 400],
+      "notes": "Formatiert die Note (Plain-Text mit Zeilenumbrüchen, HubSpot rendert \\n im Activity-Feed) und sammelt Workshop+Trainer-Kontext für die nachfolgenden Nodes (Schedule-Rows + Response)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/notes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  properties: {\n    hs_timestamp: $('Build Note Body + Workshop-Context').item.json.hs_timestamp,\n    hs_note_body: $('Build Note Body + Workshop-Context').item.json.note_body\n  },\n  associations: [{\n    to: { id: $('HubSpot Upsert Contact').item.json.id },\n    types: [{\n      associationCategory: 'HUBSPOT_DEFINED',\n      associationTypeId: 202\n    }]\n  }]\n}) }}",
+        "options": {}
+      },
+      "id": "node-hs-note-008",
+      "name": "HubSpot Create Note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "{{HUBSPOT_CRED_ID}}",
+          "name": "HubSpot Private App Token (Header Auth)"
+        }
+      },
+      "notes": "Legt eine Note an und assoziiert sie per Engagement an den Contact. associationTypeId=202 = HubSpot-Default für Note→Contact. Keine Custom-Property-Updates."
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://cloud.seatable.io/api-gateway/api/v2/dtables/36f34c52-dcdd-49a6-b414-976465d26ee4/rows/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $('Get Base Access Token').item.json.access_token }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify((function(){\n  const r = $('Create Submission Row').first().json;\n  const submissionId = (r && (r.row_ids && r.row_ids[0])) || (r && r.first_row && r.first_row._id) || (r && r._id);\n  return {\n    table_name: 'Submissions',\n    updates: [{\n      row_id: submissionId,\n      row: { HubspotContactId: $('HubSpot Upsert Contact').item.json.id }\n    }]\n  };\n})()) }}",
+        "options": {}
+      },
+      "id": "node-update-submission-009",
+      "name": "Update Submission with HubspotContactId",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 400],
+      "notes": "Schreibt die HubSpot-Contact-ID in die SeaTable-Submission zurück, damit Reporting/Debugging später den Sync nachvollziehen kann.\n\nrow_id wird defensiv aus drei möglichen Antwort-Shapes gelesen (row_ids[0] / first_row._id / _id) — SeaTable-API-Versionen unterscheiden sich hier."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Berechnet die ScheduledEmails für diese Submission.\n// Spec: SendAt = now() + offset (NICHT relativ zu Workshop.Datum, weil\n// verschiedene Teilnehmer:innen denselben Workshop zu unterschiedlichen\n// Zeiten submitten — der 24h-Anker bezieht sich auf 'morgen früh' aus\n// Sicht des Teilnehmers).\n//\n// Subject ist die SeaTable-Key-Spalte UND wird vom email-sender als\n// Mail-Betreff verwendet — daher direkt user-facing formuliert.\n\nconst body    = $('Webhook').item.json.body;\nconst ctx     = $('Build Note Body + Workshop-Context').item.json;\nconst createR = $('Create Submission Row').first().json;\nconst submissionId = (createR && createR.row_ids && createR.row_ids[0])\n                  || (createR && createR.first_row && createR.first_row._id)\n                  || (createR && createR._id);\n\nfunction sendAt(hoursFromNow) {\n  const d = new Date(Date.now() + hoursFromNow * 3600 * 1000);\n  // SeaTable date+time format: 'YYYY-MM-DD HH:mm:ss' (ohne Timezone-Suffix)\n  const pad = n => String(n).padStart(2, '0');\n  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} `\n       + `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;\n}\n\nconst rows = [\n  {\n    Subject:    `Deine Vorhaben aus dem Workshop ${ctx.workshop_name}`.slice(0, 250),\n    Submission: [submissionId],\n    Type:       'thanks_24h',\n    SendAt:     sendAt(24),\n    Status:     'pending'\n  },\n  {\n    Subject:    'Hast du deinen ersten Schritt gemacht?',\n    Submission: [submissionId],\n    Type:       'followup_78h',\n    SendAt:     sendAt(78),\n    Status:     'pending'\n  },\n  {\n    Subject:    '6 Wochen sind um — wo stehst du?',\n    Submission: [submissionId],\n    Type:       'final_6w',\n    SendAt:     sendAt(24 * 42),\n    Status:     'pending'\n  }\n];\n\n// LIFO-Followup nur wenn Workshop LIFO eingesetzt UND Teilnehmer Interesse hat.\n// Webform liefert lifo_interest 'ja'|'nein' (nie 'vielleicht'), aber für\n// Forward-Compat wird auch 'vielleicht' getriggert.\nif (ctx.workshop_lifo_verwendet && ['ja', 'vielleicht'].includes(body.lifo_interest)) {\n  rows.push({\n    Subject:    'Magst du mit deinem LIFO-Profil weiterarbeiten?',\n    Submission: [submissionId],\n    Type:       'lifo_followup',\n    SendAt:     sendAt(24 * 28),\n    Status:     'pending'\n  });\n}\n\nreturn [{ json: { table_name: 'ScheduledEmails', rows } }];"
+      },
+      "id": "node-build-schedule-010",
+      "name": "Build ScheduledEmails Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 400],
+      "notes": "3 Pflicht-Mails + optional lifo_followup. SendAt-Zeiten werden in UTC gerendert; der email-sender-Cron pollt minütlich/15-min und vergleicht ebenfalls in UTC.\n\nSubject ist sowohl SeaTable-Key-Spalte als auch späterer Mail-Betreff (Co-Work-Setup-Update)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cloud.seatable.io/api-gateway/api/v2/dtables/36f34c52-dcdd-49a6-b414-976465d26ee4/rows/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $('Get Base Access Token').item.json.access_token }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "node-insert-schedule-011",
+      "name": "Insert ScheduledEmails (Batch)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2440, 400],
+      "notes": "Batch-Insert aller ScheduledEmails-Rows in einem POST. SeaTable's /rows/-Endpoint nimmt rows-Array entgegen."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  ok: true,\n  trainer_name: $('Build Note Body + Workshop-Context').item.json.trainer_name,\n  participant_name: $('Webhook').item.json.body.participant_name\n}) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin",  "value": "*" },
+              { "name": "Access-Control-Allow-Methods", "value": "POST, OPTIONS" },
+              { "name": "Access-Control-Allow-Headers", "value": "Content-Type" },
+              { "name": "Cache-Control",                "value": "no-store" }
+            ]
+          }
+        }
+      },
+      "id": "node-respond-200-012",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2660, 400],
+      "notes": "Phase-B-Spec-konformes Response-Body. trainer_name nutzt index.html für die Confirmation-Screen-Personalisierung.\n\nCORS: Im Prod auf https://umsetzung.result-lt.de eingrenzen."
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Get Base Access Token", "type": "main", "index": 0 }]]
+    },
+    "Get Base Access Token": {
+      "main": [[{ "node": "Query Workshop", "type": "main", "index": 0 }]]
+    },
+    "Query Workshop": {
+      "main": [[{ "node": "Query Trainer", "type": "main", "index": 0 }]]
+    },
+    "Query Trainer": {
+      "main": [[{ "node": "Create Submission Row", "type": "main", "index": 0 }]]
+    },
+    "Create Submission Row": {
+      "main": [[{ "node": "HubSpot Upsert Contact", "type": "main", "index": 0 }]]
+    },
+    "HubSpot Upsert Contact": {
+      "main": [[{ "node": "Build Note Body + Workshop-Context", "type": "main", "index": 0 }]]
+    },
+    "Build Note Body + Workshop-Context": {
+      "main": [[{ "node": "HubSpot Create Note", "type": "main", "index": 0 }]]
+    },
+    "HubSpot Create Note": {
+      "main": [[{ "node": "Update Submission with HubspotContactId", "type": "main", "index": 0 }]]
+    },
+    "Update Submission with HubspotContactId": {
+      "main": [[{ "node": "Build ScheduledEmails Rows", "type": "main", "index": 0 }]]
+    },
+    "Build ScheduledEmails Rows": {
+      "main": [[{ "node": "Insert ScheduledEmails (Batch)", "type": "main", "index": 0 }]]
+    },
+    "Insert ScheduledEmails (Batch)": {
+      "main": [[{ "node": "Respond 200", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "errorWorkflow": "{{N8N_ERROR_WORKFLOW_ID}}"
+  },
+  "active": false,
+  "tags": [
+    { "name": "umsetzungstool" }
+  ],
+  "$import_notes": [
+    "Vor dem Aktivieren in n8n:",
+    "1. {{SEATABLE_CRED_ID}} und {{HUBSPOT_CRED_ID}} im Credentials-Block durch echte n8n-Credential-IDs ersetzen.",
+    "   - SeaTable-Cred: 'HTTP Header Auth' mit Authorization: 'Bearer <SEATABLE_API_TOKEN>'",
+    "   - HubSpot-Cred:  'HTTP Header Auth' mit Authorization: 'Bearer <HUBSPOT_PRIVATE_APP_TOKEN>'",
+    "2. {{N8N_ERROR_WORKFLOW_ID}} (in settings.errorWorkflow) entweder durch die ID eines Error-Workflows ersetzen, der bei Fehlern an NOTIFY_WEBHOOK postet — ODER den ganzen errorWorkflow-Key entfernen und n8n-globale Error-Notifications nutzen.",
+    "3. Webhook-URL nach dem ersten Speichern kopieren und in setup/.env als N8N_SUBMIT_URL eintragen.",
+    "4. Dann denselben Wert in index.html (Konstante WEBHOOK_SUBMIT) per Find-and-Replace einsetzen.",
+    "5. Test-Submit mit curl:",
+    "   curl -X POST https://<n8n>/webhook/submit-form -H 'Content-Type: application/json' -d '{\"workshop_id\":\"<id>\",\"participant_name\":\"Test User\",\"participant_email\":\"test@example.com\",\"participant_phone\":null,\"vorhaben_6w\":\"Test\",\"naechster_schritt_72h\":\"Test\",\"lifo_interest\":\"nein\",\"lifo_staerke\":null,\"consent\":true}'",
+    "   Erwartet: 200 + {ok:true, trainer_name, participant_name}",
+    "   Verifizieren in SeaTable: 1 neue Submission-Row + 3 ScheduledEmails (status=pending).",
+    "   Verifizieren in HubSpot: Contact angelegt/aktualisiert + 1 Note im Activity-Feed.",
+    "6. CORS im Prod auf https://umsetzung.result-lt.de eingrenzen (Webhook-Node options.allowedOrigins UND Respond-Node responseHeaders)."
+  ]
+}
