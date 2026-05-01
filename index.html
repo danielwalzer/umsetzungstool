@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Umsetzungs-Tracking · result. learning &amp; transfer</title>
+<link rel="icon" href="assets/logo-small.png">
+
+<!--
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  UMSETZUNGS-TRACKING · 3-Step Webform                            ║
+  ║  result. learning & transfer GmbH & Co. KG                       ║
+  ║                                                                  ║
+  ║  Vanilla HTML + CSS + JS · keine Frameworks · ein File           ║
+  ║                                                                  ║
+  ║  DEPLOYMENT-NOTES                                                ║
+  ║  1. {{N8N_GET_WORKSHOPS_URL}} und {{N8N_SUBMIT_URL}} mit den     ║
+  ║     finalen n8n-Webhook-URLs per Find-and-Replace ersetzen.      ║
+  ║  2. Asset-Pfade (assets/, fonts/) ggf. auf eine CDN-URL          ║
+  ║     umstellen, sobald die Datei in Webflow eingebettet wird.     ║
+  ╚══════════════════════════════════════════════════════════════════╝
+-->
+
+<style>
+  /* ============================================================
+     0 · TOKENS — direkt aus result. Design System
+     (siehe colors_and_type.css im Design-System-Repo)
+     ============================================================ */
+  :root {
+    /* Brand */
+    --rlt-navy:        #0B3041;   /* primär dunkel */
+    --rlt-navy-700:    #104862;   /* hover */
+    --rlt-blue:        #0074DA;   /* CTA / Links */
+    --rlt-blue-700:    #005CAD;
+    --rlt-blue-100:    #DDEDFA;
+    --rlt-blue-050:    #F2F8FD;
+    --rlt-cream:       #F0EBE7;   /* warmer Page-BG */
+    --rlt-ink:         #1A1A1A;
+    --rlt-grey-700:    #5A5A5A;
+    --rlt-grey-600:    #767676;
+    --rlt-grey-500:    #9A9A9A;
+    --rlt-grey-300:    #D9D9D9;
+    --rlt-grey-200:    #E8E8E8;
+    --rlt-grey-100:    #F2F2F2;
+    --rlt-white:       #FFFFFF;
+    --rlt-success:     #2E7D32;
+    --rlt-warning:     #C77700;
+    --rlt-danger:      #B33A2A;
+
+    /* Type */
+    --font-sans: "Roboto", "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+
+    /* Motion */
+    --ease: cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  /* Roboto — lokal aus dem Design-System (nur die gelieferten Files) +
+     Google Fonts Fallback für Medium/Bold upright */
+  @font-face {
+    font-family: "Roboto";
+    src: url("fonts/Roboto-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+  }
+  @import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap");
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans);
+    color: var(--rlt-ink);
+    background: var(--rlt-cream);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+
+  /* ============================================================
+     1 · APP-SHELL
+     ============================================================ */
+  .app {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  @media (min-width: 700px) {
+    .app { padding: 56px 32px 96px; }
+  }
+
+  /* ============================================================
+     2 · HEADER (Logo + Progress + Counter)
+     ============================================================ */
+  .form-header {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 56px;
+  }
+  .form-header.faded { opacity: 0.45; transition: opacity 400ms var(--ease); }
+  .form-header .logo img { height: 36px; width: auto; display: block; }
+  .progress {
+    flex: 1;
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+  }
+  .progress .seg {
+    flex: 1;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(11, 48, 65, 0.12);
+    transition: background 360ms var(--ease);
+  }
+  .progress .seg.done    { background: var(--rlt-blue); }
+  .progress .seg.current { background: var(--rlt-navy); }
+  .step-counter {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--rlt-grey-700);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  /* ============================================================
+     3 · STEP-CONTAINER
+     ============================================================ */
+  .step {
+    display: none;
+    animation: stepIn 380ms var(--ease);
+  }
+  .step.active { display: block; }
+  @keyframes stepIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  h1.headline {
+    font-size: clamp(28px, 5vw, 38px);
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    color: var(--rlt-ink);
+    margin: 0 0 12px;
+    text-wrap: balance;
+  }
+  h1.headline .ws-inline {
+    color: var(--rlt-blue);
+    font-style: italic;
+    font-weight: 700;
+  }
+  p.subhead {
+    font-size: 17px;
+    line-height: 1.55;
+    color: var(--rlt-grey-700);
+    margin: 0 0 36px;
+    max-width: 520px;
+    text-wrap: pretty;
+  }
+
+  /* ============================================================
+     4 · FORM-FELDER
+     ============================================================ */
+  .field { margin-bottom: 24px; }
+  .field-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--rlt-ink);
+    margin-bottom: 10px;
+  }
+  .field-label .opt {
+    color: var(--rlt-grey-600);
+    font-weight: 400;
+    margin-left: 6px;
+  }
+
+  .input, .select, .textarea {
+    width: 100%;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    color: var(--rlt-ink);
+    background: var(--rlt-white);
+    border: 1.5px solid rgba(11, 48, 65, 0.18);
+    border-radius: 8px;
+    padding: 14px 16px;
+    line-height: 1.4;
+    transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease);
+    -webkit-appearance: none; appearance: none;
+  }
+  .input:hover, .select:hover, .textarea:hover {
+    border-color: rgba(11, 48, 65, 0.35);
+  }
+  .input:focus, .select:focus, .textarea:focus {
+    outline: none;
+    border-color: var(--rlt-blue);
+    box-shadow: 0 0 0 4px rgba(0, 116, 218, 0.12);
+  }
+  .input.invalid { border-color: var(--rlt-danger); }
+  .textarea { resize: vertical; min-height: 96px; }
+
+  .select {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='none' stroke='%230B3041' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5l5 5 5-5'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 18px center;
+    padding-right: 44px;
+    cursor: pointer;
+  }
+  .select[disabled] { opacity: 0.65; cursor: wait; }
+
+  /* Floating-Label */
+  .float-field { position: relative; margin-bottom: 16px; }
+  .float-field .input { padding: 22px 16px 10px; }
+  .float-field label {
+    position: absolute;
+    left: 16px; top: 16px;
+    font-size: 16px;
+    color: var(--rlt-grey-600);
+    pointer-events: none;
+    transition: all 150ms var(--ease);
+    background: transparent;
+  }
+  .float-field .input:focus + label,
+  .float-field .input:not(:placeholder-shown) + label {
+    top: 6px;
+    font-size: 11px;
+    color: var(--rlt-blue);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .help, .err {
+    font-size: 13px;
+    margin-top: 8px;
+    line-height: 1.4;
+  }
+  .help { color: var(--rlt-grey-700); }
+  .err  { color: var(--rlt-danger); display: none; }
+  .err.show { display: block; }
+
+  .counter {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--rlt-grey-600);
+    margin-top: 6px;
+    letter-spacing: 0.04em;
+  }
+  .counter.warn { color: var(--rlt-warning); }
+  .counter.over { color: var(--rlt-danger); }
+
+  /* ============================================================
+     5 · CONFIRM-CARD (URL-Param-Shortcut)
+     ============================================================ */
+  .confirm-card {
+    background: var(--rlt-white);
+    border: 1.5px solid rgba(0, 116, 218, 0.30);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .confirm-card .trainer-photo {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    overflow: hidden;
+    background: var(--rlt-blue-100);
+    color: var(--rlt-blue);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 700;
+    letter-spacing: 0.02em;
+    border: 2px solid var(--rlt-white);
+    box-shadow: 0 2px 8px rgba(11, 48, 65, 0.10);
+  }
+  .confirm-card .trainer-photo img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .confirm-card .trainer-photo[hidden] { display: none; }
+  .confirm-card .icon {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: var(--rlt-blue-100);
+    color: var(--rlt-blue);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .confirm-card .lbl {
+    font-size: 12px; font-weight: 700;
+    letter-spacing: 0.10em; text-transform: uppercase;
+    color: var(--rlt-grey-700);
+    margin-bottom: 6px;
+  }
+  .confirm-card .ws-name {
+    font-size: 18px; font-weight: 700;
+    color: var(--rlt-ink); line-height: 1.3;
+    margin-bottom: 4px;
+  }
+  .confirm-card .ws-trainer {
+    font-size: 14px; color: var(--rlt-grey-700);
+  }
+
+  /* ============================================================
+     6 · CHECKBOX-ROW
+     ============================================================ */
+  .checkbox-row {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 16px;
+    background: var(--rlt-white);
+    border: 1.5px solid rgba(11, 48, 65, 0.15);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 150ms var(--ease), background 150ms var(--ease);
+    position: relative;
+  }
+  .checkbox-row:hover { border-color: rgba(11, 48, 65, 0.32); }
+  .checkbox-row:has(input:checked) {
+    border-color: var(--rlt-blue);
+    background: var(--rlt-blue-050);
+  }
+  .checkbox-row input {
+    position: absolute; opacity: 0; pointer-events: none;
+  }
+  .checkbox-row .box {
+    width: 22px; height: 22px; border-radius: 5px;
+    border: 2px solid rgba(11, 48, 65, 0.30);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 150ms var(--ease);
+    margin-top: 1px;
+    background: var(--rlt-white);
+  }
+  .checkbox-row input:checked ~ .box {
+    background: var(--rlt-blue);
+    border-color: var(--rlt-blue);
+  }
+  .checkbox-row input:checked ~ .box::after {
+    content: "";
+    width: 6px; height: 11px;
+    border: solid var(--rlt-white);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) translate(-1px, -1px);
+  }
+  .checkbox-row .text {
+    font-size: 14px; line-height: 1.5;
+    color: var(--rlt-ink);
+  }
+  .checkbox-row .text a { color: var(--rlt-blue); text-decoration: underline; }
+  .checkbox-row .text b { font-weight: 700; }
+
+  .lifo-row .lifo-ico {
+    width: 24px; height: 24px;
+    color: var(--rlt-blue);
+    flex-shrink: 0;
+    margin-top: -1px;
+  }
+
+  /* ============================================================
+     7 · BUTTONS
+     ============================================================ */
+  .actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-top: 40px;
+  }
+  .btn {
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 16px;
+    line-height: 1;
+    padding: 16px 28px;
+    border-radius: 999px;
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    transition: background 200ms var(--ease), color 200ms var(--ease), transform 200ms var(--ease);
+    text-decoration: none;
+  }
+  .btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(0, 116, 218, 0.30);
+  }
+  .btn-primary { background: var(--rlt-navy); color: var(--rlt-white); }
+  .btn-primary:hover {
+    background: var(--rlt-navy-700);
+    transform: translateY(-1px);
+  }
+  .btn-primary[disabled] {
+    background: var(--rlt-grey-300);
+    cursor: not-allowed;
+    transform: none;
+    opacity: 0.7;
+  }
+  .btn-primary::after { content: "→"; font-size: 18px; }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--rlt-grey-700);
+    border-color: transparent;
+    padding-left: 8px;
+  }
+  .btn-ghost:hover { color: var(--rlt-ink); }
+  .btn-ghost::before { content: "←"; margin-right: 8px; font-size: 18px; }
+
+  .btn-submit {
+    background: var(--rlt-blue);
+    color: var(--rlt-white);
+  }
+  .btn-submit:hover { background: var(--rlt-blue-700); transform: translateY(-1px); }
+  .btn-submit::after { content: "→"; font-size: 18px; }
+  .btn-submit.loading {
+    background: var(--rlt-blue-700);
+    pointer-events: none;
+  }
+  .btn-submit.loading::after {
+    content: "";
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: var(--rlt-white);
+    border-radius: 50%;
+    animation: spin 700ms linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ============================================================
+     8 · CONFIRMATION SCREEN — zwei Varianten
+     ============================================================ */
+  .done-wrap {
+    display: none;
+    text-align: left;
+    animation: stepIn 500ms var(--ease);
+  }
+  .done-wrap.active { display: block; }
+
+  /* — Subtle (default) — */
+  .done-icon {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    background: var(--rlt-blue-100);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 0 28px;
+    animation: pop 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .done-icon svg { width: 38px; height: 38px; }
+  @keyframes pop {
+    0%   { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .done-headline {
+    font-size: clamp(34px, 5.5vw, 44px);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--rlt-ink);
+    margin: 0 0 16px;
+  }
+  .done-subhead {
+    font-size: 17px;
+    line-height: 1.6;
+    color: var(--rlt-grey-700);
+    margin: 0 0 32px;
+    max-width: 540px;
+  }
+  .done-subhead b { color: var(--rlt-ink); font-weight: 700; }
+
+  .echo-card {
+    background: var(--rlt-white);
+    border: 1px solid rgba(11, 48, 65, 0.10);
+    border-left: 4px solid var(--rlt-blue);
+    border-radius: 4px 12px 12px 4px;
+    padding: 22px 26px;
+    margin-bottom: 14px;
+    box-shadow: 0 8px 24px -10px rgba(11, 48, 65, 0.12);
+  }
+  .echo-card .lbl {
+    font-size: 12px; font-weight: 700;
+    letter-spacing: 0.10em; text-transform: uppercase;
+    color: var(--rlt-grey-700);
+    margin-bottom: 10px;
+  }
+  .echo-card .text {
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--rlt-ink);
+    white-space: pre-wrap;
+    text-wrap: pretty;
+  }
+  .done-foot {
+    font-size: 14px;
+    color: var(--rlt-grey-700);
+    line-height: 1.6;
+    padding-top: 24px;
+    margin-top: 24px;
+    border-top: 1px solid rgba(11, 48, 65, 0.10);
+  }
+
+  /* — Big variant: extra hero treatment — */
+  .done-wrap.big .done-hero {
+    position: relative;
+    background: var(--rlt-navy);
+    color: var(--rlt-white);
+    border-radius: 20px;
+    padding: 44px 36px 40px;
+    margin: 0 0 28px;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .done-wrap.big .done-hero::before {
+    content: "";
+    position: absolute;
+    top: -120px; right: -120px;
+    width: 360px; height: 360px;
+    border-radius: 50%;
+    background: var(--rlt-blue);
+    opacity: 0.55;
+    z-index: -1;
+    animation: heroFloat 8s ease-in-out infinite;
+  }
+  .done-wrap.big .done-hero::after {
+    content: "";
+    position: absolute;
+    bottom: -160px; left: -80px;
+    width: 280px; height: 280px;
+    border-radius: 50%;
+    background: var(--rlt-blue-700);
+    opacity: 0.4;
+    z-index: -1;
+    animation: heroFloat 10s ease-in-out infinite reverse;
+  }
+  @keyframes heroFloat {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(-12px, 16px); }
+  }
+  .done-wrap.big .done-icon {
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(2px);
+    width: 88px; height: 88px;
+    margin: 0 0 24px;
+  }
+  .done-wrap.big .done-icon svg circle { fill: var(--rlt-white); }
+  .done-wrap.big .done-icon svg path   { stroke: var(--rlt-blue); }
+  .done-wrap.big .done-headline {
+    color: var(--rlt-white);
+    font-size: clamp(40px, 7vw, 56px);
+    font-weight: 900;
+    margin: 0 0 14px;
+  }
+  .done-wrap.big .done-subhead {
+    color: rgba(255, 255, 255, 0.86);
+    margin: 0;
+    max-width: none;
+  }
+  .done-wrap.big .done-subhead b { color: var(--rlt-white); }
+
+  .done-wrap.big .echo-card {
+    border-left-width: 0;
+    border-radius: 14px;
+    padding: 24px 28px;
+    border: 1px solid rgba(11, 48, 65, 0.08);
+    box-shadow: 0 12px 32px -16px rgba(11, 48, 65, 0.18);
+    position: relative;
+    overflow: hidden;
+  }
+  .done-wrap.big .echo-card::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, var(--rlt-blue), var(--rlt-navy));
+  }
+  .done-wrap.big .echo-card .lbl {
+    color: var(--rlt-blue);
+  }
+  .done-wrap.big .echo-quote {
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  .done-wrap.big .countdown {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin-top: 28px;
+    padding: 16px 20px;
+    background: var(--rlt-blue-050);
+    border-radius: 12px;
+    font-size: 14px;
+    color: var(--rlt-ink);
+    line-height: 1.5;
+  }
+  .done-wrap.big .countdown .pulse {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--rlt-blue);
+    flex-shrink: 0;
+    box-shadow: 0 0 0 0 rgba(0, 116, 218, 0.6);
+    animation: pulse 1.8s var(--ease) infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(0, 116, 218, 0.55); }
+    70%  { box-shadow: 0 0 0 14px rgba(0, 116, 218, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 116, 218, 0); }
+  }
+
+  /* Subtle hides hero, big hides plain icon */
+  .done-wrap:not(.big) .done-hero,
+  .done-wrap:not(.big) .countdown { display: none; }
+  .done-wrap.big > .done-icon { display: none; }
+  .done-wrap.big > .done-headline,
+  .done-wrap.big > .done-subhead { display: none; }
+
+  /* ============================================================
+     9 · A11y helpers
+     ============================================================ */
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0);
+    white-space: nowrap; border: 0;
+  }
+</style>
+</head>
+<body>
+
+  <main class="app">
+
+    <!-- ════════════════ HEADER ════════════════ -->
+    <header class="form-header" id="form-header">
+      <a href="#" class="logo" aria-label="result. learning &amp; transfer Startseite">
+        <img src="assets/logo.png" alt="result. learning &amp; transfer">
+      </a>
+      <div class="progress" id="progress" role="progressbar"
+           aria-valuemin="1" aria-valuemax="3" aria-valuenow="1"
+           aria-label="Fortschritt">
+        <div class="seg current"></div>
+        <div class="seg"></div>
+        <div class="seg"></div>
+      </div>
+      <span class="step-counter" id="step-counter" aria-hidden="true">1/3</span>
+    </header>
+
+    <!-- ════════════════ STEP 1 — Workshop ════════════════ -->
+    <section class="step active" data-step="1" data-screen-label="01 Workshop"
+             aria-labelledby="step1-headline">
+      <!-- DEFAULT: Workshop ist über URL-Param ?workshop_id=… vorausgefüllt.
+           Headline + Subhead reflektieren das. Falls KEIN Param vorhanden ist
+           oder der Workshop nicht in der API-Antwort gefunden wird, fällt JS
+           auf den Dropdown-Modus zurück und passt die Texte an. -->
+      <h1 class="headline" id="step1-headline">
+        Danke für deine Teilnahme an
+        <span class="ws-inline" id="headline-ws">deinem Workshop</span>.
+      </h1>
+      <p class="subhead" id="step1-subhead">
+        Hier ist dein Umsetzungsplan für die nächsten 6 Wochen.
+      </p>
+
+      <!-- Confirm-Card: Default-View (Workshop bereits bekannt) -->
+      <div id="ws-confirm" hidden>
+        <div class="confirm-card">
+          <!-- Trainer-Foto: Bild wenn vorhanden, sonst Initialen, sonst ausgeblendet -->
+          <div class="trainer-photo" id="trainer-photo" aria-hidden="true">
+            <span id="trainer-initials">—</span>
+          </div>
+          <div>
+            <div class="lbl">Du warst bei</div>
+            <div class="ws-name" id="confirm-name">—</div>
+            <div class="ws-trainer">mit <b id="confirm-trainer">—</b></div>
+          </div>
+        </div>
+        <p class="help">Stimmt das? Dann geht's weiter.</p>
+      </div>
+
+      <!-- Fallback: Dropdown (Default sichtbar; wird ausgeblendet, wenn
+           ein Workshop per URL-Param erfolgreich vorausgefüllt wurde) -->
+      <div id="ws-picker">
+        <div class="field">
+          <label class="field-label" for="workshop">Welchen Workshop hast du besucht?</label>
+          <select class="select" id="workshop" name="workshop"
+                  aria-describedby="workshop-help" disabled>
+            <option value="" disabled selected>Lade Workshops …</option>
+          </select>
+          <p class="help" id="workshop-help">Trainer:in wird automatisch ermittelt.</p>
+          <p class="err" id="workshop-err" role="alert">
+            Workshops konnten nicht geladen werden. Bitte lade die Seite neu
+            oder schreib uns direkt an
+            <a href="mailto:umsetzung@result.de">umsetzung@result.de</a>.
+          </p>
+        </div>
+      </div>
+
+      <div class="actions">
+        <span></span>
+        <button class="btn btn-primary" data-next>Weiter</button>
+      </div>
+    </section>
+
+    <!-- ════════════════ STEP 2 — Vorhaben (HERZSTÜCK) ════════════════ -->
+    <section class="step" data-step="2" data-screen-label="02 Vorhaben"
+             aria-labelledby="step2-headline">
+      <h1 class="headline" id="step2-headline">Was nimmst du mit?</h1>
+      <p class="subhead">Zwei Sätze reichen — sei konkret, nicht perfekt.</p>
+
+      <div class="field">
+        <label class="field-label" for="vorhaben">
+          Das nehme ich mir für die nächsten 6 Wochen vor
+        </label>
+        <textarea
+          class="textarea" id="vorhaben" name="vorhaben"
+          rows="4" maxlength="500"
+          placeholder="z.B. Ich führe wöchentliche 1:1s mit meinem Team ein und nehme mir 30 min Zeit für jedes Gespräch."
+          data-counter="vorhaben-counter"></textarea>
+        <div class="counter" id="vorhaben-counter" aria-live="polite">0 / 500</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="naechster-schritt">
+          Mein nächster Schritt in den nächsten 72 Stunden
+        </label>
+        <textarea
+          class="textarea" id="naechster-schritt" name="naechsterSchritt"
+          rows="2" maxlength="500"
+          placeholder="z.B. Ich schreibe heute Abend die Einladung an mein Team."
+          data-counter="schritt-counter"></textarea>
+        <div class="counter" id="schritt-counter" aria-live="polite">0 / 500</div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-ghost" data-prev>Zurück</button>
+        <button class="btn btn-primary" data-next>Weiter</button>
+      </div>
+    </section>
+
+    <!-- ════════════════ STEP 3 — Kontakt + LIFO + DSGVO ════════════════ -->
+    <section class="step" data-step="3" data-screen-label="03 Kontakt"
+             aria-labelledby="step3-headline">
+      <h1 class="headline" id="step3-headline">Last but not least.</h1>
+      <p class="subhead">Damit wir dir die Zusammenfassung schicken können.</p>
+
+      <div class="float-field">
+        <input class="input" type="text" id="name" name="name"
+               placeholder=" " autocomplete="name" required>
+        <label for="name">Name</label>
+      </div>
+
+      <div class="float-field">
+        <input class="input" type="email" id="email" name="email"
+               placeholder=" " autocomplete="email" required
+               aria-describedby="email-err">
+        <label for="email">E-Mail</label>
+        <p class="err" id="email-err" role="alert">
+          Bitte gib eine gültige E-Mail-Adresse ein.
+        </p>
+      </div>
+
+      <div class="float-field">
+        <input class="input" type="tel" id="telefon" name="telefon"
+               placeholder=" " autocomplete="tel">
+        <label for="telefon">Telefon (optional)</label>
+      </div>
+
+      <!-- LIFO-Checkbox ist gemäß Brief immer sichtbar. Der Submit-Handler in n8n
+           erhält `lifo_interest: "ja" | "nein"` und entscheidet selbst, ob ein
+           lifo_followup-Mail-Job angelegt werden soll. -->
+      <label class="checkbox-row lifo-row" id="lifo-row" style="margin-top: 8px;">
+        <input type="checkbox" id="lifo" name="lifo">
+        <span class="box" aria-hidden="true"></span>
+        <svg class="lifo-ico" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 3l2.6 5.5 6.1.7-4.5 4.2 1.2 6L12 16.8 6.6 19.4l1.2-6L3.3 9.2l6.1-.7L12 3z"
+                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        </svg>
+        <span class="text">
+          <b>Ja</b>, ich möchte gezielt an meinen Stärken weiterarbeiten —
+          schickt mir Infos zum LIFO®-Stärkenmanagement.
+        </span>
+      </label>
+
+      <label class="checkbox-row" style="margin-top: 12px;">
+        <input type="checkbox" id="dsgvo" required aria-describedby="dsgvo-err">
+        <span class="box" aria-hidden="true"></span>
+        <span class="text">
+          Ich bin einverstanden, dass result. mir Follow-Up-Mails zu meinem
+          Workshop schickt. <a href="#" target="_blank" rel="noopener">Datenschutz</a>
+        </span>
+      </label>
+      <p class="err" id="dsgvo-err" style="margin-left: 4px;" role="alert">
+        Bitte bestätige die Einwilligung.
+      </p>
+
+      <p class="err" id="submit-err" role="alert" style="margin-top: 16px;">
+        Beim Senden ist ein Fehler aufgetreten. Versuche es bitte nochmal
+        oder schreib direkt an
+        <a href="mailto:umsetzung@result.de">umsetzung@result.de</a>.
+      </p>
+
+      <div class="actions">
+        <button class="btn btn-ghost" data-prev>Zurück</button>
+        <button class="btn btn-submit" id="submit-btn">Vorhaben absenden</button>
+      </div>
+    </section>
+
+    <!-- ════════════════ CONFIRMATION SCREEN ════════════════ -->
+    <section class="done-wrap" id="done"
+             data-screen-label="04 Confirmation"
+             aria-labelledby="done-headline">
+
+      <!-- BIG variant only: Hero block -->
+      <div class="done-hero">
+        <div class="done-icon">
+          <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+            <circle cx="24" cy="24" r="22" fill="#0074DA"/>
+            <path d="M14 24l7 7 13-14" stroke="#fff" stroke-width="3.5"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h1 class="done-headline" id="done-headline-big">Du bist dran. 💪</h1>
+        <p class="done-subhead">
+          Morgen bekommst du eine E-Mail von
+          <b id="trainer-echo-big">deinem Trainer</b>
+          mit deiner Zusammenfassung — als Erinnerung an dein Versprechen
+          an dich selbst.
+        </p>
+      </div>
+
+      <!-- SUBTLE variant only: plain icon + headline + subhead -->
+      <div class="done-icon">
+        <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+          <circle cx="24" cy="24" r="22" fill="#0074DA"/>
+          <path d="M14 24l7 7 13-14" stroke="#fff" stroke-width="3.5"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1 class="done-headline" id="done-headline">Du bist dran. 💪</h1>
+      <p class="done-subhead">
+        Morgen bekommst du eine E-Mail von
+        <b id="trainer-echo">deinem Trainer</b>
+        mit deiner Zusammenfassung — als Erinnerung an dein Versprechen
+        an dich selbst.
+      </p>
+
+      <div class="echo-card">
+        <div class="lbl">Deine 6-Wochen-Vorhaben</div>
+        <div class="text echo-quote" id="echo-vorhaben">—</div>
+      </div>
+      <div class="echo-card">
+        <div class="lbl">Dein nächster Schritt in 72 h</div>
+        <div class="text echo-quote" id="echo-schritt">—</div>
+      </div>
+
+      <!-- BIG variant only: live "Mail kommt morgen" indicator -->
+      <div class="countdown">
+        <span class="pulse" aria-hidden="true"></span>
+        <span>
+          Deine Zusammenfassung ist eingeplant.
+          Du bekommst sie morgen früh per Mail.
+        </span>
+      </div>
+
+      <p class="done-foot">
+        Bei Fragen einfach auf die Mail antworten — sie geht direkt an
+        <b id="trainer-foot">deinen Trainer</b>.
+      </p>
+    </section>
+
+  </main>
+
+<script>
+/* ════════════════════════════════════════════════════════════════
+   KONFIGURATION
+   ════════════════════════════════════════════════════════════════ */
+
+/* n8n-Webhook-URLs. Vor dem Webflow-Embed per Find-and-Replace
+   durch die finalen URLs ersetzen. */
+const WEBHOOK_GET_WORKSHOPS = "{{N8N_GET_WORKSHOPS_URL}}";
+const WEBHOOK_SUBMIT        = "{{N8N_SUBMIT_URL}}";
+
+/* Confirmation-Screen-Stil: "subtle" (default, ruhige Card) oder
+   "big" (Navy-Hero mit Pulse-Indicator). Brief-Entscheidung: subtle. */
+const CONFIRM_VARIANT = "subtle";
+
+/* ════════════════════════════════════════════════════════════════
+   STATE
+   ════════════════════════════════════════════════════════════════ */
+const formState = {
+  workshopId: null,
+  workshopName: null,
+  trainer: null,
+  vorhaben: "",
+  naechsterSchritt: "",
+  lifoInteresse: false,
+  name: "",
+  email: "",
+  telefon: "",
+  dsgvo: false,
+};
+
+/* In-Memory-Cache der per Webhook geladenen Workshops, damit URL-Param-
+   Lookups und Dropdown-Auswahl gegen dieselbe Quelle laufen. */
+let workshopsById = Object.create(null);
+
+const STEPS_TOTAL = 3;
+let currentIdx = 0;
+
+/* ════════════════════════════════════════════════════════════════
+   STEP NAVIGATION
+   ════════════════════════════════════════════════════════════════ */
+function showStep(idx) {
+  currentIdx = Math.max(0, Math.min(idx, STEPS_TOTAL - 1));
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  const target = document.querySelector(`.step[data-step="${currentIdx + 1}"]`);
+  if (target) target.classList.add('active');
+  updateProgress();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function updateProgress() {
+  const prog = document.getElementById('progress');
+  prog.innerHTML = '';
+  for (let i = 0; i < STEPS_TOTAL; i++) {
+    const seg = document.createElement('div');
+    seg.className = 'seg' +
+      (i < currentIdx ? ' done' : i === currentIdx ? ' current' : '');
+    prog.appendChild(seg);
+  }
+  prog.setAttribute('aria-valuenow', String(currentIdx + 1));
+  document.getElementById('step-counter').textContent =
+    `${currentIdx + 1}/${STEPS_TOTAL}`;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   VALIDATION
+   ════════════════════════════════════════════════════════════════ */
+function validateCurrent() {
+  const idx = currentIdx + 1;
+
+  if (idx === 1) {
+    // Wenn Confirm-Card sichtbar ist, ist der Workshop bereits gesetzt.
+    const confirmVisible = !document.getElementById('ws-confirm').hidden;
+    if (confirmVisible && formState.workshopId) return true;
+
+    const ws = document.getElementById('workshop');
+    if (!ws.value) {
+      ws.focus();
+      ws.classList.add('invalid');
+      return false;
+    }
+    const opt = ws.selectedOptions[0];
+    formState.workshopId   = ws.value;
+    formState.workshopName = opt.textContent.trim();
+    formState.trainer      = opt.dataset.trainer || null;
+    return true;
+  }
+
+  if (idx === 2) {
+    formState.vorhaben         = document.getElementById('vorhaben').value.trim();
+    formState.naechsterSchritt = document.getElementById('naechster-schritt').value.trim();
+    if (!formState.vorhaben) {
+      document.getElementById('vorhaben').focus();
+      return false;
+    }
+    if (!formState.naechsterSchritt) {
+      document.getElementById('naechster-schritt').focus();
+      return false;
+    }
+    return true;
+  }
+
+  if (idx === 3) {
+    formState.name    = document.getElementById('name').value.trim();
+    formState.email   = document.getElementById('email').value.trim();
+    formState.telefon = document.getElementById('telefon').value.trim();
+    formState.lifoInteresse = document.getElementById('lifo').checked;
+    formState.dsgvo   = document.getElementById('dsgvo').checked;
+
+    let ok = true;
+    if (!formState.name) {
+      document.getElementById('name').focus();
+      ok = false;
+    }
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formState.email);
+    document.getElementById('email-err').classList.toggle('show', !emailOk);
+    document.getElementById('email').classList.toggle('invalid', !emailOk);
+    if (!emailOk) ok = false;
+
+    document.getElementById('dsgvo-err').classList.toggle('show', !formState.dsgvo);
+    if (!formState.dsgvo) ok = false;
+    return ok;
+  }
+  return true;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   WIRING — Buttons, Counters, Inline-Validation
+   ════════════════════════════════════════════════════════════════ */
+document.querySelectorAll('[data-next]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (!validateCurrent()) return;
+    showStep(currentIdx + 1);
+  });
+});
+document.querySelectorAll('[data-prev]').forEach(btn => {
+  btn.addEventListener('click', () => showStep(currentIdx - 1));
+});
+
+document.querySelectorAll('textarea[data-counter]').forEach(ta => {
+  const target = document.getElementById(ta.dataset.counter);
+  const max = parseInt(ta.maxLength, 10) || 500;
+  const update = () => {
+    const len = ta.value.length;
+    target.textContent = `${len} / ${max}`;
+    target.classList.toggle('warn', len > max * 0.85 && len <= max);
+    target.classList.toggle('over', len > max);
+  };
+  ta.addEventListener('input', update);
+  update();
+});
+
+const emailInput = document.getElementById('email');
+emailInput.addEventListener('blur', () => {
+  if (!emailInput.value) return;
+  const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.value);
+  document.getElementById('email-err').classList.toggle('show', !ok);
+  emailInput.classList.toggle('invalid', !ok);
+});
+document.getElementById('dsgvo').addEventListener('change', e => {
+  document.getElementById('dsgvo-err').classList.toggle('show', !e.target.checked);
+});
+document.getElementById('workshop').addEventListener('change', e => {
+  e.target.classList.remove('invalid');
+});
+
+/* ════════════════════════════════════════════════════════════════
+   HELPERS
+   ════════════════════════════════════════════════════════════════ */
+function initialsFrom(name) {
+  if (!name) return '';
+  return name.split(/\s+/).filter(Boolean)
+    .slice(0, 2).map(p => p[0].toUpperCase()).join('');
+}
+
+function renderTrainerPhoto(trainer, photoUrl) {
+  const photoEl = document.getElementById('trainer-photo');
+  photoEl.innerHTML = '';
+  if (photoUrl) {
+    const img = document.createElement('img');
+    img.src = photoUrl;
+    img.alt = `Foto von ${trainer}`;
+    img.onerror = () => {
+      photoEl.innerHTML = '';
+      const span = document.createElement('span');
+      span.textContent = initialsFrom(trainer);
+      photoEl.appendChild(span);
+    };
+    photoEl.appendChild(img);
+    photoEl.hidden = false;
+  } else if (trainer) {
+    const span = document.createElement('span');
+    span.textContent = initialsFrom(trainer);
+    photoEl.appendChild(span);
+    photoEl.hidden = false;
+  } else {
+    photoEl.hidden = true;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   WORKSHOPS LADEN + STEP-1-MODUS BESTIMMEN
+   ════════════════════════════════════════════════════════════════ */
+async function loadWorkshops() {
+  const select = document.getElementById('workshop');
+  const errEl  = document.getElementById('workshop-err');
+
+  try {
+    const res = await fetch(WEBHOOK_GET_WORKSHOPS, { method: 'GET' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const list = await res.json();
+
+    /* Erwartetes Format pro Eintrag (siehe workflows/get-active-workshops.json):
+         { id, Name, Datum, LifoVerwendet, TrainerName, TrainerPhoto? }
+       TrainerPhoto ist eine sinnvolle Erweiterung der Phase-B-Spec, damit das
+       runde Trainer-Foto in der Confirm-Card aus SeaTable bestückt werden
+       kann. Fehlt es, fällt das UI automatisch auf Initialen zurück. */
+
+    workshopsById = Object.create(null);
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    placeholder.textContent = 'Bitte auswählen …';
+    select.appendChild(placeholder);
+
+    list.forEach(ws => {
+      workshopsById[ws.id] = ws;
+      const o = document.createElement('option');
+      o.value = ws.id;
+      o.textContent = ws.Name;
+      o.dataset.trainer       = ws.TrainerName || '';
+      o.dataset.trainerPhoto  = ws.TrainerPhoto || '';
+      o.dataset.lifoVerwendet = String(!!ws.LifoVerwendet);
+      select.appendChild(o);
+    });
+
+    select.disabled = false;
+    return list;
+  } catch (err) {
+    console.error('[umsetzungstool] Workshops konnten nicht geladen werden:', err);
+    select.innerHTML = '';
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.disabled = true;
+    opt.selected = true;
+    opt.textContent = 'Workshops nicht verfügbar';
+    select.appendChild(opt);
+    select.disabled = true;
+    errEl.classList.add('show');
+    return null;
+  }
+}
+
+function applyConfirmCardMode(ws) {
+  const wsName = ws.Name;
+  const trainer = ws.TrainerName || '—';
+  const trainerPhoto = ws.TrainerPhoto || '';
+
+  document.getElementById('ws-confirm').hidden = false;
+  document.getElementById('ws-picker').hidden  = true;
+
+  document.getElementById('headline-ws').textContent     = wsName;
+  document.getElementById('confirm-name').textContent    = wsName;
+  document.getElementById('confirm-trainer').textContent = trainer;
+  renderTrainerPhoto(trainer, trainerPhoto);
+
+  // Verstecktes Dropdown für spätere Validierung synchron halten
+  const select = document.getElementById('workshop');
+  const opt = Array.from(select.options).find(o => o.value === ws.id);
+  if (opt) select.value = ws.id;
+
+  formState.workshopId   = ws.id;
+  formState.workshopName = wsName;
+  formState.trainer      = trainer;
+}
+
+function applyPickerMode() {
+  document.getElementById('ws-confirm').hidden = true;
+  document.getElementById('ws-picker').hidden  = false;
+  document.getElementById('step1-headline').textContent =
+    'Schön, dass du hier bist.';
+  document.getElementById('step1-subhead').textContent =
+    'Lass uns deinen Workshop kurz festhalten.';
+}
+
+/* ════════════════════════════════════════════════════════════════
+   INIT — Workshops laden, dann Step-1-Modus wählen
+   ════════════════════════════════════════════════════════════════ */
+(async function init() {
+  showStep(0);
+
+  const params = new URLSearchParams(location.search);
+  const wsId = params.get('workshop_id');
+
+  // Solange die Workshops noch nicht geladen sind, im Picker-Modus bleiben,
+  // aber Headline/Subhead so lassen wie im Markup (Confirm-Variante), damit
+  // bei vorhandenem URL-Param kein kurzer Sprung entsteht.
+  if (!wsId) applyPickerMode();
+
+  const list = await loadWorkshops();
+
+  if (list && wsId) {
+    const ws = workshopsById[wsId];
+    if (ws) {
+      applyConfirmCardMode(ws);
+    } else {
+      // URL-Param zeigt auf einen unbekannten Workshop → in Picker-Modus
+      // zurückfallen, damit die Person trotzdem submitten kann.
+      applyPickerMode();
+    }
+  } else if (!list && wsId) {
+    // Fetch fehlgeschlagen + URL-Param: Headline schon umstellen, Fehler ist
+    // unten am Picker sichtbar.
+    applyPickerMode();
+  }
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   SUBMIT
+   ════════════════════════════════════════════════════════════════ */
+document.getElementById('submit-btn').addEventListener('click', async () => {
+  if (!validateCurrent()) return;
+
+  const btn = document.getElementById('submit-btn');
+  const errEl = document.getElementById('submit-err');
+  const originalLabel = btn.textContent;
+
+  errEl.classList.remove('show');
+  btn.classList.add('loading');
+  btn.textContent = 'Sende ab …';
+
+  /* Body-Shape gemäß Phase-B-Spec (workflows/submit-handler.json):
+     - lifo_interest: binär "ja" | "nein" — kein null, kein "vielleicht"
+     - lifo_staerke:  immer null, wird über das Webform nicht erfasst
+     - participant_phone: leerer String → null */
+  const payload = {
+    workshop_id:           formState.workshopId,
+    participant_name:      formState.name,
+    participant_email:     formState.email,
+    participant_phone:     formState.telefon || null,
+    vorhaben_6w:           formState.vorhaben,
+    naechster_schritt_72h: formState.naechsterSchritt,
+    lifo_interest:         formState.lifoInteresse ? 'ja' : 'nein',
+    lifo_staerke:          null,
+    consent:               formState.dsgvo,
+  };
+
+  try {
+    const res = await fetch(WEBHOOK_SUBMIT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json().catch(() => ({}));
+
+    renderConfirmation({
+      vorhaben:         formState.vorhaben,
+      naechsterSchritt: formState.naechsterSchritt,
+      // Trainer-Name aus Server-Antwort bevorzugen (autoritativ),
+      // sonst client-seitig bekannten Wert nutzen.
+      trainer:          data.trainer_name || formState.trainer || 'deinem Trainer',
+    });
+  } catch (err) {
+    console.error('[umsetzungstool] Submit fehlgeschlagen:', err);
+    errEl.classList.add('show');
+    btn.classList.remove('loading');
+    btn.textContent = originalLabel;
+  }
+});
+
+/* ════════════════════════════════════════════════════════════════
+   CONFIRMATION RENDERN
+   ════════════════════════════════════════════════════════════════ */
+function renderConfirmation({ vorhaben, naechsterSchritt, trainer }) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById('form-header').classList.add('faded');
+
+  const done = document.getElementById('done');
+  done.classList.add('active');
+  done.classList.toggle('big', CONFIRM_VARIANT === 'big');
+
+  document.getElementById('echo-vorhaben').textContent = vorhaben || '—';
+  document.getElementById('echo-schritt').textContent  = naechsterSchritt || '—';
+
+  document.getElementById('trainer-echo').textContent     = trainer;
+  document.getElementById('trainer-echo-big').textContent = trainer;
+  document.getElementById('trainer-foot').textContent     = trainer;
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
