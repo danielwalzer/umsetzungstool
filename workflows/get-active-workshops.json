@@ -134,7 +134,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [1340, 300],
-      "notes": "CORS: für Live-Betrieb 'Access-Control-Allow-Origin' auf https://www.result-lt.de eingrenzen. Während Webflow-Preview/Staging ist '*' okay."
+      "notes": "CORS: für Live-Betrieb 'Access-Control-Allow-Origin' auf https://umsetzung.result-lt.de eingrenzen. Während Webflow-Preview/Staging ist '*' okay."
     }
   ],
   "connections": {
@@ -170,6 +170,6 @@
     "2. Credential-Typ: 'HTTP Header Auth' mit Name='Authorization' und Value='Bearer <SEATABLE_API_TOKEN>'.",
     "3. Webhook-URL nach dem ersten Speichern kopieren und in setup/.env als N8N_GET_WORKSHOPS_URL eintragen.",
     "4. Test: GET https://<n8n>/webhook/get-active-workshops → muss JSON-Array liefern.",
-    "5. Wenn aktiv: Access-Control-Allow-Origin auf https://www.result-lt.de einschränken statt '*'."
+    "5. Wenn aktiv: Access-Control-Allow-Origin auf https://umsetzung.result-lt.de einschränken statt '*'."
   ]
 }

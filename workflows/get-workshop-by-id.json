@@ -195,7 +195,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [1560, 420],
-      "notes": "200 + Workshop-Objekt. CORS-Hinweis: '*' nur für Dev/Staging, im Prod auf https://www.result-lt.de eingrenzen."
+      "notes": "200 + Workshop-Objekt. CORS-Hinweis: '*' nur für Dev/Staging, im Prod auf https://umsetzung.result-lt.de eingrenzen."
     }
   ],
   "connections": {
@@ -240,6 +240,6 @@
     "   GET https://<n8n>/webhook/get-workshop-by-id?id=archiviert       → 404 {error: 'workshop_not_available'}",
     "   GET https://<n8n>/webhook/get-workshop-by-id                     → 404 (leerer id-Param)",
     "   GET https://<n8n>/webhook/get-workshop-by-id?id='OR'1'='1        → 404 (Sanitizer strippt Quotes)",
-    "4. Wenn aktiv: Access-Control-Allow-Origin auf https://www.result-lt.de einschränken statt '*'."
+    "4. Wenn aktiv: Access-Control-Allow-Origin auf https://umsetzung.result-lt.de einschränken statt '*'."
   ]
 }
