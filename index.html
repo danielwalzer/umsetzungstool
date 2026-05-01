@@ -13,9 +13,12 @@
   ║                                                                  ║
   ║  Vanilla HTML + CSS + JS · keine Frameworks · ein File           ║
   ║                                                                  ║
+  ║  Endgültige URL: https://www.result-lt.de/umsetzung              ║
+  ║  Workshop-Pre-Fill: ?workshop_id=<row_id>                        ║
+  ║                                                                  ║
   ║  DEPLOYMENT-NOTES                                                ║
-  ║  1. {{N8N_GET_WORKSHOPS_URL}} und {{N8N_SUBMIT_URL}} mit den     ║
-  ║     finalen n8n-Webhook-URLs per Find-and-Replace ersetzen.      ║
+  ║  1. Vor dem Webflow-Embed die drei {{N8N_…_URL}}-Platzhalter     ║
+  ║     mit den echten n8n-Webhook-URLs ersetzen (Find-and-Replace). ║
   ║  2. Asset-Pfade (assets/, fonts/) ggf. auf eine CDN-URL          ║
   ║     umstellen, sobald die Datei in Webflow eingebettet wird.     ║
   ╚══════════════════════════════════════════════════════════════════╝
@@ -682,6 +685,9 @@
           </div>
         </div>
         <p class="help">Stimmt das? Dann geht's weiter.</p>
+        <p class="help" style="margin-top: 6px;">
+          <a href="#" id="switch-to-picker">Falscher Workshop? Anderen auswählen →</a>
+        </p>
       </div>
 
       <!-- Fallback: Dropdown (Default sichtbar; wird ausgeblendet, wenn
@@ -694,6 +700,10 @@
             <option value="" disabled selected>Lade Workshops …</option>
           </select>
           <p class="help" id="workshop-help">Trainer:in wird automatisch ermittelt.</p>
+          <p class="err" id="workshop-unavailable-err" role="alert">
+            Dieser Workshop ist nicht (mehr) verfügbar. Bitte wähle deinen
+            Workshop unten aus.
+          </p>
           <p class="err" id="workshop-err" role="alert">
             Workshops konnten nicht geladen werden. Bitte lade die Seite neu
             oder schreib uns direkt an
@@ -882,10 +892,16 @@
    KONFIGURATION
    ════════════════════════════════════════════════════════════════ */
 
+/* Endgültige Form-Domain — wird im Code nirgends benutzt, dient nur als
+   Klarheits-Anker für künftige Lese-Personen. Echte Form-URLs werden
+   server-seitig per SeaTable-Formelspalte 'FormUrl' generiert. */
+const FORM_DOMAIN = "https://www.result-lt.de/umsetzung";
+
 /* n8n-Webhook-URLs. Vor dem Webflow-Embed per Find-and-Replace
    durch die finalen URLs ersetzen. */
-const WEBHOOK_GET_WORKSHOPS = "{{N8N_GET_WORKSHOPS_URL}}";
-const WEBHOOK_SUBMIT        = "{{N8N_SUBMIT_URL}}";
+const WEBHOOK_GET_WORKSHOPS       = "{{N8N_GET_WORKSHOPS_URL}}";
+const WEBHOOK_GET_WORKSHOP_BY_ID  = "{{N8N_GET_WORKSHOP_BY_ID_URL}}";
+const WEBHOOK_SUBMIT              = "{{N8N_SUBMIT_URL}}";
 
 /* Confirmation-Screen-Stil: "subtle" (default, ruhige Card) oder
    "big" (Navy-Hero mit Pulse-Indicator). Brief-Entscheidung: subtle. */
@@ -1077,11 +1093,32 @@ function renderTrainerPhoto(trainer, photoUrl) {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   WORKSHOPS LADEN + STEP-1-MODUS BESTIMMEN
+   WORKSHOPS — zwei Endpoints
+   ════════════════════════════════════════════════════════════════
+   - fetchWorkshopById(id) → effizient, nur ein Workshop. Wird vom QR-Code-
+     Pfad genutzt. Liefert null bei 404, wirft bei anderen Fehlern.
+   - ensureWorkshopsList() → idempotenter Lazy-Loader für den Picker-
+     Dropdown. Mehrfach aufrufbar (z.B. aus dem 'Falscher Workshop?'-
+     Klick), startet aber höchstens einen Fetch.
    ════════════════════════════════════════════════════════════════ */
-async function loadWorkshops() {
+
+async function fetchWorkshopById(id) {
+  const url = `${WEBHOOK_GET_WORKSHOP_BY_ID}?id=${encodeURIComponent(id)}`;
+  const res = await fetch(url, { method: 'GET' });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+let workshopsListPromise = null;
+function ensureWorkshopsList() {
+  if (!workshopsListPromise) workshopsListPromise = loadWorkshopsList();
+  return workshopsListPromise;
+}
+
+async function loadWorkshopsList() {
   const select = document.getElementById('workshop');
-  const errEl  = document.getElementById('workshop-err');
+  const fetchErrEl = document.getElementById('workshop-err');
 
   try {
     const res = await fetch(WEBHOOK_GET_WORKSHOPS, { method: 'GET' });
@@ -1089,10 +1126,7 @@ async function loadWorkshops() {
     const list = await res.json();
 
     /* Erwartetes Format pro Eintrag (siehe workflows/get-active-workshops.json):
-         { id, Name, Datum, LifoVerwendet, TrainerName, TrainerPhoto? }
-       TrainerPhoto ist eine sinnvolle Erweiterung der Phase-B-Spec, damit das
-       runde Trainer-Foto in der Confirm-Card aus SeaTable bestückt werden
-       kann. Fehlt es, fällt das UI automatisch auf Initialen zurück. */
+         { id, Name, Datum, LifoVerwendet, TrainerName, TrainerPhoto } */
 
     workshopsById = Object.create(null);
     select.innerHTML = '';
@@ -1126,8 +1160,11 @@ async function loadWorkshops() {
     opt.textContent = 'Workshops nicht verfügbar';
     select.appendChild(opt);
     select.disabled = true;
-    errEl.classList.add('show');
-    return null;
+    fetchErrEl.classList.add('show');
+    // Promise rejected, damit ensureWorkshopsList() bei einem späteren
+    // 'Falscher Workshop?'-Klick erneut lädt (Cache wird nicht "vergiftet").
+    workshopsListPromise = null;
+    throw err;
   }
 }
 
@@ -1144,54 +1181,88 @@ function applyConfirmCardMode(ws) {
   document.getElementById('confirm-trainer').textContent = trainer;
   renderTrainerPhoto(trainer, trainerPhoto);
 
-  // Verstecktes Dropdown für spätere Validierung synchron halten
-  const select = document.getElementById('workshop');
-  const opt = Array.from(select.options).find(o => o.value === ws.id);
-  if (opt) select.value = ws.id;
+  // Bottom-Button-Label an Confirm-Kontext anpassen
+  const nextBtn = document.querySelector('.step[data-step="1"] [data-next]');
+  if (nextBtn) nextBtn.textContent = 'Stimmt, weiter';
 
   formState.workshopId   = ws.id;
   formState.workshopName = wsName;
   formState.trainer      = trainer;
+  // TrainerPhoto im State halten für spätere Wiederverwendung (z.B.
+  // Confirmation-Screen). Bewusst NICHT im SeaTable-Submit-Payload —
+  // das wickeln die Mail-Templates server-seitig direkt aus FotoUrl ab.
+  formState.trainerPhoto = trainerPhoto;
 }
 
-function applyPickerMode() {
+function applyPickerMode(opts) {
+  opts = opts || {};
   document.getElementById('ws-confirm').hidden = true;
   document.getElementById('ws-picker').hidden  = false;
+
   document.getElementById('step1-headline').textContent =
     'Schön, dass du hier bist.';
   document.getElementById('step1-subhead').textContent =
     'Lass uns deinen Workshop kurz festhalten.';
+
+  // Confirm-Card-State im formState verwerfen, damit die Validierung in
+  // Step 1 wieder eine Pflicht-Auswahl im Dropdown verlangt.
+  formState.workshopId = null;
+  formState.workshopName = null;
+  formState.trainer = null;
+
+  const nextBtn = document.querySelector('.step[data-step="1"] [data-next]');
+  if (nextBtn) nextBtn.textContent = 'Weiter';
+
+  // Optional: 'Workshop nicht verfügbar'-Hinweis einblenden, wenn der
+  // Wechsel durch einen 404 vom QR-Pfad ausgelöst wurde.
+  document.getElementById('workshop-unavailable-err')
+    .classList.toggle('show', !!opts.unavailable);
 }
 
 /* ════════════════════════════════════════════════════════════════
-   INIT — Workshops laden, dann Step-1-Modus wählen
+   'FALSCHER WORKSHOP?' — Switch zur Picker-Auswahl
+   ════════════════════════════════════════════════════════════════ */
+document.getElementById('switch-to-picker').addEventListener('click', e => {
+  e.preventDefault();
+  applyPickerMode();
+  // Picker-Liste lazily nachladen, falls bisher noch nicht passiert
+  // (kommt typischerweise vor, wenn der User per QR-Code reingekommen ist
+  // und wir nur den Single-Workshop-Endpoint aufgerufen haben).
+  ensureWorkshopsList().catch(() => { /* Fehler-UI im Loader selbst */ });
+  document.getElementById('workshop').focus();
+});
+
+/* ════════════════════════════════════════════════════════════════
+   INIT — Step-1-Modus bestimmen, Workshops je nach Pfad laden
    ════════════════════════════════════════════════════════════════ */
 (async function init() {
   showStep(0);
 
-  const params = new URLSearchParams(location.search);
-  const wsId = params.get('workshop_id');
+  const wsId = new URLSearchParams(location.search).get('workshop_id');
 
-  // Solange die Workshops noch nicht geladen sind, im Picker-Modus bleiben,
-  // aber Headline/Subhead so lassen wie im Markup (Confirm-Variante), damit
-  // bei vorhandenem URL-Param kein kurzer Sprung entsteht.
-  if (!wsId) applyPickerMode();
+  if (!wsId) {
+    // Direktaufruf ohne QR-Code → sofort Picker, Liste laden
+    applyPickerMode();
+    ensureWorkshopsList().catch(() => { /* Fehler-UI im Loader */ });
+    return;
+  }
 
-  const list = await loadWorkshops();
-
-  if (list && wsId) {
-    const ws = workshopsById[wsId];
+  // QR-Code-/FormUrl-Pfad: nur den einen Workshop laden (effizient).
+  // Markup-Default ist bereits die Confirm-Headline, also kein Sprung.
+  try {
+    const ws = await fetchWorkshopById(wsId);
     if (ws) {
       applyConfirmCardMode(ws);
     } else {
-      // URL-Param zeigt auf einen unbekannten Workshop → in Picker-Modus
-      // zurückfallen, damit die Person trotzdem submitten kann.
-      applyPickerMode();
+      // 404 — archiviert oder unbekannt
+      applyPickerMode({ unavailable: true });
+      ensureWorkshopsList().catch(() => { /* s.o. */ });
     }
-  } else if (!list && wsId) {
-    // Fetch fehlgeschlagen + URL-Param: Headline schon umstellen, Fehler ist
-    // unten am Picker sichtbar.
+  } catch (err) {
+    console.error('[umsetzungstool] get-workshop-by-id fehlgeschlagen:', err);
+    // Anderes als 404 (Netz, 5xx) → Picker als Fallback, generischer Fehler
     applyPickerMode();
+    ensureWorkshopsList().catch(() => { /* s.o. */ });
   }
 })();
 
