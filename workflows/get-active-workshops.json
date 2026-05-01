@@ -1,0 +1,175 @@
+{
+  "name": "Umsetzungstool — Get Active Workshops",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "get-active-workshops",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "umsetzungstool-get-active-workshops",
+      "notes": "GET /webhook/get-active-workshops — wird vom Webform (index.html) aufgerufen, um den Workshop-Picker zu befüllen oder als Fallback wenn ?workshop_id=… nicht aufgelöst werden konnte."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://cloud.seatable.io/api/v2.1/dtable/app-access-token/",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "node-token-002",
+      "name": "Get Base Access Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "{{SEATABLE_CRED_ID}}",
+          "name": "SeaTable API Token (Header Auth: 'Authorization: Bearer <SEATABLE_API_TOKEN>')"
+        }
+      },
+      "notes": "Tauscht den langlebigen Base-API-Token gegen einen kurzlebigen Base-Access-Token (~3h gültig). Antwort enthält access_token, dtable_uuid, dtable_server."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cloud.seatable.io/api-gateway/api/v2/dtables/36f34c52-dcdd-49a6-b414-976465d26ee4/sql/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get Base Access Token').item.json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"sql\": \"SELECT _id, Name, Datum, LifoVerwendet, Trainer FROM Workshops WHERE Status = 'active' ORDER BY Datum DESC LIMIT 200\",\n  \"convert_keys\": true\n}",
+        "options": {}
+      },
+      "id": "node-workshops-003",
+      "name": "Query Workshops (SQL)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300],
+      "notes": "SQL gegen SeaTable API-Gateway. Filter Status='active', Sortierung neueste zuerst, harte Obergrenze 200 (sicherheitshalber, aktive Workshops sollten << 50 sein)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cloud.seatable.io/api-gateway/api/v2/dtables/36f34c52-dcdd-49a6-b414-976465d26ee4/sql/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get Base Access Token').item.json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"sql\": \"SELECT _id, Name, FotoUrl FROM Trainer WHERE Aktiv = true LIMIT 200\",\n  \"convert_keys\": true\n}",
+        "options": {}
+      },
+      "id": "node-trainers-004",
+      "name": "Query Trainer (SQL)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300],
+      "notes": "Lädt alle aktiven Trainer als Lookup-Tabelle. Gemacht als zweite SQL-Query statt JOIN, weil SeaTable-SQL-JOINs weniger zuverlässig sind als zwei kleine Queries + Code-Join."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Joint Trainer-Stammdaten in jeden Workshop und transformiert in das\n// API-Response-Format, das index.html erwartet.\n//\n// Erwartetes Response-Shape pro Workshop:\n//   { id, Name, Datum, LifoVerwendet, TrainerName, TrainerPhoto }\n//\n// SeaTable-Eigenheit: Link-Spalten sind is_multiple=true (lässt sich nicht\n// abschalten), liefern also IMMER Arrays. Wir greifen Trainer[0].\n\nconst workshopsResp = $('Query Workshops (SQL)').first().json;\nconst trainersResp  = $('Query Trainer (SQL)').first().json;\n\nconst workshops = (workshopsResp && workshopsResp.results) || [];\nconst trainers  = (trainersResp  && trainersResp.results)  || [];\n\n// Trainer-Lookup nach SeaTable-Row-ID\nconst trainersById = Object.create(null);\nfor (const t of trainers) {\n  trainersById[t._id] = t;\n}\n\n// SeaTable-Link-Spalten kommen je nach Version als\n//   ['rowid_abc', 'rowid_def']  ODER\n//   [{row_id: 'rowid_abc', display_value: 'Anna Köhler'}, ...]\n// Beide Formen abfangen.\nfunction firstLinkedId(link) {\n  if (!Array.isArray(link) || link.length === 0) return null;\n  const first = link[0];\n  if (typeof first === 'string') return first;\n  if (first && typeof first === 'object' && first.row_id) return first.row_id;\n  return null;\n}\n\nconst out = workshops.map(ws => {\n  const trainerId = firstLinkedId(ws.Trainer);\n  const trainer   = trainerId ? trainersById[trainerId] : null;\n  return {\n    id:            ws._id,\n    Name:          ws.Name || '',\n    Datum:         ws.Datum || '',\n    LifoVerwendet: !!ws.LifoVerwendet,\n    TrainerName:   trainer ? (trainer.Name || '') : '',\n    TrainerPhoto:  trainer ? (trainer.FotoUrl || '') : ''\n  };\n});\n\nreturn [{ json: { workshops: out } }];"
+      },
+      "id": "node-transform-005",
+      "name": "Transform → API Shape",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300],
+      "notes": "Joint Trainer-Stammdaten an Workshops, gibt Response-Array für die index.html zurück."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.workshops }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET, OPTIONS"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "node-respond-006",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 300],
+      "notes": "CORS: für Live-Betrieb 'Access-Control-Allow-Origin' auf https://www.result-lt.de eingrenzen. Während Webflow-Preview/Staging ist '*' okay."
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Get Base Access Token", "type": "main", "index": 0 }]]
+    },
+    "Get Base Access Token": {
+      "main": [[{ "node": "Query Workshops (SQL)", "type": "main", "index": 0 }]]
+    },
+    "Query Workshops (SQL)": {
+      "main": [[{ "node": "Query Trainer (SQL)", "type": "main", "index": 0 }]]
+    },
+    "Query Trainer (SQL)": {
+      "main": [[{ "node": "Transform → API Shape", "type": "main", "index": 0 }]]
+    },
+    "Transform → API Shape": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  },
+  "active": false,
+  "tags": [
+    { "name": "umsetzungstool" }
+  ],
+  "$import_notes": [
+    "Vor dem Aktivieren in n8n:",
+    "1. {{SEATABLE_CRED_ID}} im Credentials-Block durch die echte n8n-Credential-ID ersetzen.",
+    "2. Credential-Typ: 'HTTP Header Auth' mit Name='Authorization' und Value='Bearer <SEATABLE_API_TOKEN>'.",
+    "3. Webhook-URL nach dem ersten Speichern kopieren und in setup/.env als N8N_GET_WORKSHOPS_URL eintragen.",
+    "4. Test: GET https://<n8n>/webhook/get-active-workshops → muss JSON-Array liefern.",
+    "5. Wenn aktiv: Access-Control-Allow-Origin auf https://www.result-lt.de einschränken statt '*'."
+  ]
+}
