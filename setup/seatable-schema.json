@@ -1,7 +1,17 @@
 {
-  "$schema_version": "1.0",
-  "base_name": "Umsetzungstool",
+  "$schema_version": "1.1",
+  "base_name": "Umsetzungs-Tracking",
+  "base_uuid": "36f34c52-dcdd-49a6-b414-976465d26ee4",
+  "workspace_id": 83657,
+  "server": "https://cloud.seatable.io",
+  "api_gateway": "https://cloud.seatable.io/api-gateway/",
   "description": "SeaTable-Base für das Umsetzungs-Tracking nach result.-Workshops. Enthält Trainer-Stammdaten, Workshop-Termine, eingehende Teilnehmer-Submissions vom Webform und die Queue für zeitversetzt zu versendende E-Mails (24h, 78h, 6w).",
+  "$notes": [
+    "Schema steht in SeaTable, befüllt mit 4 Trainern (Geschäftsführung) und Test-Workshop 'Pilot-Test 2026'.",
+    "Alle Link-Spalten sind is_multiple: true (SeaTable-Default, lässt sich via API nicht überschreiben). In jedem Workflow das erste Element greifen: linkedItems[0].",
+    "Trainer.Foto (image) bleibt leer und wird nicht mehr genutzt — Bilder kommen über Trainer.FotoUrl als externe URL.",
+    "ScheduledEmails.Subject ist die Key-Spalte (SeaTable-Zwang); kann zusätzlich als Mail-Betreff genutzt werden."
+  ],
   "tables": [
     {
       "name": "Trainer",
@@ -21,7 +31,13 @@
         {
           "name": "Foto",
           "type": "image",
-          "description": "Portraitfoto des Trainers (quadratisch, min. 400x400px). Wird in der E-Mail-Signatur eingebettet. Upload direkt in SeaTable."
+          "deprecated": true,
+          "description": "DEPRECATED — bleibt leer, nicht mehr nutzen. Bilder kommen über FotoUrl. Spalte wird aus historischen Gründen nicht gelöscht."
+        },
+        {
+          "name": "FotoUrl",
+          "type": "url",
+          "description": "Externe URL zum Portraitfoto des Trainers (quadratisch, min. 400x400px). Wird in der Confirm-Card des Webforms und in den E-Mail-Templates per <img src=\"...\"> eingebunden. Bei leerem Wert: UI fällt automatisch auf Initialen zurück."
         },
         {
           "name": "SignatureHtml",
@@ -56,8 +72,8 @@
           "name": "Trainer",
           "type": "link",
           "linked_table": "Trainer",
-          "multiple": false,
-          "description": "Verknüpfung zum durchführenden Trainer. Bei Co-Trainings den Hauptverantwortlichen wählen – seine Signatur und sein Foto landen in den E-Mails."
+          "is_multiple": true,
+          "description": "Verknüpfung zum durchführenden Trainer. Bei Co-Trainings den Hauptverantwortlichen ZUERST wählen — Workflows greifen Trainer[0]. SeaTable erlaubt fachlich nur einen, technisch ist die Spalte aber Multi-Link (SeaTable-Default, API-überschreibbar nicht)."
         },
         {
           "name": "LifoVerwendet",
@@ -86,13 +102,14 @@
           "name": "Workshop",
           "type": "link",
           "linked_table": "Workshops",
-          "multiple": false,
-          "description": "Verknüpfung zum Workshop, an dem der Teilnehmer teilgenommen hat. Wird vom Webform mitgesendet."
+          "is_multiple": true,
+          "description": "Verknüpfung zum Workshop, an dem der Teilnehmer teilgenommen hat. Wird vom Webform mitgesendet. Multi-Link (SeaTable-Default), Workflows greifen Workshop[0]."
         },
         {
           "name": "TeilnehmerName",
           "type": "text",
-          "description": "Vor- und Nachname des Teilnehmers wie im Webform eingegeben. Pflichtfeld."
+          "key": true,
+          "description": "Vor- und Nachname des Teilnehmers wie im Webform eingegeben. Pflichtfeld. Gleichzeitig SeaTable-Key-Spalte (Text-Pflicht für Spalte 1)."
         },
         {
           "name": "Email",
@@ -102,7 +119,7 @@
         {
           "name": "Telefon",
           "type": "text",
-          "description": "Telefonnummer des Teilnehmers (optional). Wird an HubSpot synchronisiert, falls vorhanden."
+          "description": "Telefonnummer des Teilnehmers (optional). Wird beim HubSpot-Contact-Upsert mitgegeben, falls vorhanden."
         },
         {
           "name": "Vorhaben6W",
@@ -146,11 +163,17 @@
       "description": "Queue aller zeitversetzt zu versendenden E-Mails. n8n-Cron pollt diese Tabelle minütlich, prüft pending+SendAt<=now, versendet via MS Graph und aktualisiert Status.",
       "columns": [
         {
+          "name": "Subject",
+          "type": "text",
+          "key": true,
+          "description": "Mail-Betreff bzw. Schlüssel-Feld der Zeile. SeaTable erzwingt eine Text-Key-Spalte als erste Spalte; wird gleichzeitig als finaler E-Mail-Betreff verwendet (vom email-sender.json gesetzt). Format-Vorschlag: 'thanks_24h · Anna Köhler · Pilot-Test 2026'."
+        },
+        {
           "name": "Submission",
           "type": "link",
           "linked_table": "Submissions",
-          "multiple": false,
-          "description": "Verknüpfung zur auslösenden Submission. Über sie werden Empfänger, Workshop und Trainer aufgelöst."
+          "is_multiple": true,
+          "description": "Verknüpfung zur auslösenden Submission. Über sie werden Empfänger, Workshop und Trainer aufgelöst. Multi-Link (SeaTable-Default), email-sender greift Submission[0]."
         },
         {
           "name": "Type",
