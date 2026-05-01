@@ -1,0 +1,24 @@
+# Secrets
+.env
+.env.local
+*.env
+credentials.json
+token.json
+
+# Temp & build
+.tmp/
+node_modules/
+dist/
+build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*

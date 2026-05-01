@@ -1,0 +1,69 @@
+{
+  "$schema_version": "1.0",
+  "object_type": "contact",
+  "description": "5 Custom Properties auf dem Contact-Objekt in HubSpot Free. Werden von n8n nach jeder Submission gesetzt, damit Vertrieb und Beratung in HubSpot sehen, welcher Teilnehmer aus welchem result.-Workshop kommt und ob LIFO-Anschluss-Interesse besteht. Anlegen in HubSpot UI: Settings → Properties → Contact properties → Create property.",
+  "property_group": {
+    "name": "result_umsetzung",
+    "label": "result. Umsetzung",
+    "description": "Eigene Property-Gruppe für alle Felder, die aus dem Umsetzungs-Tracking-Tool nach result.-Workshops befüllt werden. Vor dem Anlegen der Properties einmalig erstellen."
+  },
+  "properties": [
+    {
+      "label": "Letzter Workshop",
+      "internal_name": "letzter_workshop",
+      "field_type": "single-line text",
+      "type": "string",
+      "group": "result_umsetzung",
+      "description": "Name des zuletzt besuchten result.-Workshops. Wird bei jeder neuen Submission überschrieben, sodass im Kontakt immer der aktuellste Workshop sichtbar ist. Quelle: SeaTable Workshops.Name."
+    },
+    {
+      "label": "Letzter Trainer",
+      "internal_name": "letzter_trainer",
+      "field_type": "single-line text",
+      "type": "string",
+      "group": "result_umsetzung",
+      "description": "Name des Trainers, der den letzten Workshop des Kontakts geleitet hat. Hilft Vertrieb beim warm-up im Folgegespräch. Quelle: SeaTable Trainer.Name via Workshops.Trainer."
+    },
+    {
+      "label": "Workshop-Datum",
+      "internal_name": "workshop_datum",
+      "field_type": "date picker",
+      "type": "date",
+      "group": "result_umsetzung",
+      "description": "Datum des letzten besuchten Workshops (nur Datum, keine Uhrzeit). Basis für Reporting 'Wer war wann bei uns?' und für Reaktivierungs-Kampagnen. Quelle: SeaTable Workshops.Datum."
+    },
+    {
+      "label": "LIFO-Workshop besucht",
+      "internal_name": "lifo_workshop_besucht",
+      "field_type": "single checkbox",
+      "type": "bool",
+      "group": "result_umsetzung",
+      "description": "True, wenn der Kontakt mindestens einen Workshop besucht hat, in dem das LIFO-Tool eingesetzt wurde. Wird einmalig auf true gesetzt und nicht zurückgesetzt – LIFO-Erfahrung 'verfällt' nicht."
+    },
+    {
+      "label": "LIFO-Weiterarbeit Interesse",
+      "internal_name": "lifo_weiterarbeit_interesse",
+      "field_type": "dropdown select",
+      "type": "enumeration",
+      "group": "result_umsetzung",
+      "options": [
+        {
+          "label": "Ja",
+          "value": "ja",
+          "description": "Teilnehmer hat im Webform aktives Interesse an LIFO-Weiterarbeit angegeben. Vertrieb sollte aktiv nachfassen."
+        },
+        {
+          "label": "Vielleicht",
+          "value": "vielleicht",
+          "description": "Teilnehmer ist offen, aber nicht entschieden. Eignet sich für Nurturing-Sequenz statt Direktansprache."
+        },
+        {
+          "label": "Nein",
+          "value": "nein",
+          "description": "Teilnehmer hat explizit kein Interesse an LIFO-Weiterarbeit. Nicht für LIFO-Kampagnen targeten."
+        }
+      ],
+      "description": "Antwort des Teilnehmers auf die LIFO-Interesse-Frage im Webform. Quelle: SeaTable Submissions.LifoInteresse. Wird nur überschrieben, wenn der Kontakt einen neuen LIFO-Workshop besucht und erneut antwortet."
+    }
+  ]
+}

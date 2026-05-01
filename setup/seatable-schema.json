@@ -1,0 +1,203 @@
+{
+  "$schema_version": "1.0",
+  "base_name": "Umsetzungstool",
+  "description": "SeaTable-Base für das Umsetzungs-Tracking nach result.-Workshops. Enthält Trainer-Stammdaten, Workshop-Termine, eingehende Teilnehmer-Submissions vom Webform und die Queue für zeitversetzt zu versendende E-Mails (24h, 78h, 6w).",
+  "tables": [
+    {
+      "name": "Trainer",
+      "description": "Stammdaten aller result.-Trainer. Wird beim Anlegen eines Workshops als Verknüpfung benötigt und liefert Foto + E-Mail-Signatur für die ausgehenden Mails.",
+      "columns": [
+        {
+          "name": "Name",
+          "type": "text",
+          "key": true,
+          "description": "Vor- und Nachname des Trainers, z.B. 'Daniel Walzer'. Wird in den E-Mails an die Teilnehmer als Absendername angezeigt."
+        },
+        {
+          "name": "Email",
+          "type": "email",
+          "description": "Persönliche result.-E-Mail des Trainers. Wird als Reply-To in den ausgehenden Mails gesetzt, damit Teilnehmer-Antworten direkt beim Trainer landen."
+        },
+        {
+          "name": "Foto",
+          "type": "image",
+          "description": "Portraitfoto des Trainers (quadratisch, min. 400x400px). Wird in der E-Mail-Signatur eingebettet. Upload direkt in SeaTable."
+        },
+        {
+          "name": "SignatureHtml",
+          "type": "long-text",
+          "description": "HTML-Signaturblock des Trainers (Name, Titel, Telefon, Adresse). Wird unten an jede automatisch versendete E-Mail angehängt."
+        },
+        {
+          "name": "Aktiv",
+          "type": "checkbox",
+          "default": true,
+          "description": "Ist der Trainer aktuell verfügbar? Inaktive Trainer werden im Workshop-Anlage-Dropdown nicht mehr angezeigt, bestehende Workshop-Verknüpfungen bleiben erhalten."
+        }
+      ]
+    },
+    {
+      "name": "Workshops",
+      "description": "Jeder durchgeführte Workshop ist hier ein Datensatz. Wird vom Webform via n8n-GET abgefragt, damit Teilnehmer ihren Workshop im Dropdown auswählen können.",
+      "columns": [
+        {
+          "name": "Name",
+          "type": "text",
+          "key": true,
+          "description": "Workshop-Bezeichnung wie sie der Teilnehmer im Webform-Dropdown sieht, z.B. 'Führungskräfte-Training Müller GmbH'. Kurz und eindeutig halten."
+        },
+        {
+          "name": "Datum",
+          "type": "date",
+          "format": "YYYY-MM-DD",
+          "description": "Datum des Workshop-Tags (bei mehrtägigen Workshops: letzter Tag). Basis für die Berechnung von SendAt der zeitversetzten Mails (24h, 78h, 6w nach diesem Datum)."
+        },
+        {
+          "name": "Trainer",
+          "type": "link",
+          "linked_table": "Trainer",
+          "multiple": false,
+          "description": "Verknüpfung zum durchführenden Trainer. Bei Co-Trainings den Hauptverantwortlichen wählen – seine Signatur und sein Foto landen in den E-Mails."
+        },
+        {
+          "name": "LifoVerwendet",
+          "type": "checkbox",
+          "default": false,
+          "description": "Wurde im Workshop das LIFO-Tool eingesetzt? Steuert, ob die LIFO-bezogenen Fragen im Webform und die LIFO-Followup-Mail aktiviert werden."
+        },
+        {
+          "name": "Status",
+          "type": "single-select",
+          "options": [
+            { "name": "active", "color": "#59CB74", "description": "Workshop ist im Webform-Dropdown auswählbar." },
+            { "name": "draft", "color": "#FFEAB6", "description": "Noch nicht freigegeben, taucht im Webform nicht auf." },
+            { "name": "archived", "color": "#CCCCCC", "description": "Abgeschlossen und ausgeblendet, Submissions bleiben referenzierbar." }
+          ],
+          "default": "draft",
+          "description": "Sichtbarkeitsstatus des Workshops im Teilnehmer-Webform. Nur 'active' wird im Dropdown angezeigt."
+        }
+      ]
+    },
+    {
+      "name": "Submissions",
+      "description": "Jede Webform-Einsendung eines Teilnehmers landet hier als ein Datensatz. n8n-Submit-Webhook schreibt direkt in diese Tabelle und legt parallel die ScheduledEmails an.",
+      "columns": [
+        {
+          "name": "Workshop",
+          "type": "link",
+          "linked_table": "Workshops",
+          "multiple": false,
+          "description": "Verknüpfung zum Workshop, an dem der Teilnehmer teilgenommen hat. Wird vom Webform mitgesendet."
+        },
+        {
+          "name": "TeilnehmerName",
+          "type": "text",
+          "description": "Vor- und Nachname des Teilnehmers wie im Webform eingegeben. Pflichtfeld."
+        },
+        {
+          "name": "Email",
+          "type": "email",
+          "description": "E-Mail-Adresse des Teilnehmers. Empfänger aller automatisch versendeten Mails. Pflichtfeld."
+        },
+        {
+          "name": "Telefon",
+          "type": "text",
+          "description": "Telefonnummer des Teilnehmers (optional). Wird an HubSpot synchronisiert, falls vorhanden."
+        },
+        {
+          "name": "Vorhaben6W",
+          "type": "long-text",
+          "description": "Antwort auf 'Was setze ich in den nächsten 6 Wochen konkret um?' aus dem Webform. Kern-Commitment des Teilnehmers."
+        },
+        {
+          "name": "NaechsterSchritt72h",
+          "type": "long-text",
+          "description": "Antwort auf 'Was ist mein nächster Schritt in den nächsten 72 Stunden?' aus dem Webform. Wird in der 78h-Followup-Mail zitiert."
+        },
+        {
+          "name": "LifoInteresse",
+          "type": "single-select",
+          "options": [
+            { "name": "ja", "color": "#59CB74" },
+            { "name": "vielleicht", "color": "#FFEAB6" },
+            { "name": "nein", "color": "#FFA89E" }
+          ],
+          "description": "Antwort auf 'Möchtest du mit deinem LIFO-Profil weiterarbeiten?'. Nur sichtbar/befüllt, wenn der Workshop LifoVerwendet=true hat."
+        },
+        {
+          "name": "LifoStaerke",
+          "type": "long-text",
+          "description": "Frei formulierte LIFO-Stärke oder Beobachtung des Teilnehmers (optional). Nur sichtbar/befüllt, wenn der Workshop LifoVerwendet=true hat."
+        },
+        {
+          "name": "HubspotContactId",
+          "type": "text",
+          "description": "ID des in HubSpot angelegten oder aktualisierten Kontakts. Wird von n8n nach erfolgreichem CRM-Sync zurückgeschrieben. Leer = Sync ausstehend oder fehlgeschlagen."
+        },
+        {
+          "name": "EingegangenAm",
+          "type": "ctime",
+          "description": "Zeitstempel, wann die Submission in SeaTable eingetroffen ist. SeaTable-System-Spalte 'Created time' – wird automatisch beim Insert gesetzt und ist read-only. Basis für SLA-Tracking."
+        }
+      ]
+    },
+    {
+      "name": "ScheduledEmails",
+      "description": "Queue aller zeitversetzt zu versendenden E-Mails. n8n-Cron pollt diese Tabelle minütlich, prüft pending+SendAt<=now, versendet via MS Graph und aktualisiert Status.",
+      "columns": [
+        {
+          "name": "Submission",
+          "type": "link",
+          "linked_table": "Submissions",
+          "multiple": false,
+          "description": "Verknüpfung zur auslösenden Submission. Über sie werden Empfänger, Workshop und Trainer aufgelöst."
+        },
+        {
+          "name": "Type",
+          "type": "single-select",
+          "options": [
+            { "name": "thanks_24h", "color": "#A0E1E1", "description": "Dankes-Mail 24h nach Workshop-Datum." },
+            { "name": "followup_78h", "color": "#B5D9F5", "description": "Erinnerung an den 72h-Schritt, Versand 78h nach Workshop." },
+            { "name": "final_6w", "color": "#C8B6E2", "description": "Reflexions-Mail 6 Wochen nach Workshop, bezieht sich auf Vorhaben6W." },
+            { "name": "lifo_followup", "color": "#FFC1A8", "description": "LIFO-spezifischer Followup, nur bei LifoInteresse=ja oder vielleicht." }
+          ],
+          "description": "Art der Mail. Bestimmt Template, Platzhalter und ob bestimmte Felder gefüllt sein müssen."
+        },
+        {
+          "name": "SendAt",
+          "type": "date",
+          "format": "YYYY-MM-DD HH:mm",
+          "description": "Geplanter Versandzeitpunkt (Europe/Berlin). Wird beim Anlegen der Submission aus Workshop.Datum + Offset berechnet."
+        },
+        {
+          "name": "Status",
+          "type": "single-select",
+          "options": [
+            { "name": "pending", "color": "#FFEAB6", "description": "Noch nicht versendet, wartet auf SendAt." },
+            { "name": "sent", "color": "#59CB74", "description": "Erfolgreich versendet, GraphMessageId und SentAt sind gesetzt." },
+            { "name": "failed", "color": "#FFA89E", "description": "Versand fehlgeschlagen, ErrorMessage enthält Details." },
+            { "name": "cancelled", "color": "#CCCCCC", "description": "Manuell oder automatisch abgebrochen (z.B. Teilnehmer abgemeldet)." }
+          ],
+          "default": "pending",
+          "description": "Aktueller Versandstatus. Nur 'pending' wird vom n8n-Worker abgearbeitet."
+        },
+        {
+          "name": "SentAt",
+          "type": "date",
+          "format": "YYYY-MM-DD HH:mm",
+          "description": "Tatsächlicher Versandzeitpunkt. Wird von n8n nach erfolgreichem MS-Graph-Call gesetzt. Leer bei Status pending/failed/cancelled."
+        },
+        {
+          "name": "GraphMessageId",
+          "type": "text",
+          "description": "Message-ID, die MS Graph beim erfolgreichen Versand zurückgibt. Erlaubt späteres Tracking in der zentralen Mailbox umsetzung@result.de."
+        },
+        {
+          "name": "ErrorMessage",
+          "type": "long-text",
+          "description": "Fehlermeldung bei Status=failed. Enthält API-Response von MS Graph oder n8n-Exception. Für manuellen Retry und Debugging."
+        }
+      ]
+    }
+  ]
+}
