@@ -5,7 +5,8 @@ Teilnehmer:innen scannen am Ende eines Workshops einen QR-Code, halten
 in 3 Schritten ihr 6-Wochen-Vorhaben fest, und bekommen 4 zeitversetzte
 Erinnerungs-Mails von ihrem Trainer.
 
-**Live-Domain:** [https://umsetzung.result-lt.de](https://umsetzung.result-lt.de)
+**Test-URL:** [https://danielwalzer.github.io/umsetzungstool/](https://danielwalzer.github.io/umsetzungstool/)
+**Live-Domain (nach Migration):** [https://umsetzung.result-lt.de](https://umsetzung.result-lt.de)
 
 ---
 
@@ -13,8 +14,9 @@ Erinnerungs-Mails von ihrem Trainer.
 
 ```
                 ┌──────────────────────────────────┐
-                │  https://umsetzung.result-lt.de  │
-                │  (Cloudflare Pages, Vanilla JS)  │
+                │  github.io/umsetzungstool/  ← Test│
+                │  umsetzung.result-lt.de     ← Live│
+                │  (GitHub Pages, Vanilla JS)      │
                 └────────────────┬─────────────────┘
                                  │ HTTPS
               ┌──────────────────┼──────────────────┐
@@ -45,7 +47,7 @@ Erinnerungs-Mails von ihrem Trainer.
 | Schicht        | Tool                     | Rolle                                       |
 |----------------|--------------------------|---------------------------------------------|
 | Webform        | Vanilla HTML/CSS/JS      | Single-File `index.html`, kein Build-Step   |
-| Hosting        | Cloudflare Pages         | Free-Tier, Auto-Deploy via Git, CNAME       |
+| Hosting        | GitHub Pages             | Free, Auto-Deploy via Git-Push, ~30s Build  |
 | Datenhaltung   | SeaTable Cloud           | Base „Umsetzungs-Tracking", 4 Tabellen      |
 | Orchestrierung | n8n (selbst gehostet)    | 4 Workflows                                 |
 | CRM            | HubSpot Free             | Notes via REST API (kein Custom-Properties) |
@@ -213,26 +215,57 @@ sed -i '' \
 
 (Pfade entsprechend eurer n8n-Domain anpassen.)
 
-### 6. 🌐 Cloudflare Pages
+### 6. 🌐 GitHub Pages (Test-Phase)
 
-1. **GitHub-Repo verbinden**: Cloudflare Dashboard → Workers &amp; Pages
-   → Create → Pages → Connect to Git → Repo wählen.
-2. **Build settings**: Framework = `None`, Build command leer, Build
-   output directory = `/`.
-3. **Deploy** → Cloudflare gibt eine `<project>.pages.dev`-URL.
-4. **Custom Domain**: Pages → Custom domains → Add → `umsetzung.result-lt.de`.
-   Cloudflare zeigt das CNAME-Target an.
+Repo `danielwalzer/umsetzungstool` ist von Co-Work bereits angelegt mit
+einem Coming-Soon-Stub und GitHub Pages aktiviert. Code muss noch
+gepusht werden.
 
-### 7. 🟦 DNS
+```bash
+# Im lokalen Repo (Umsetzungstool/):
+git remote add origin https://github.com/danielwalzer/umsetzungstool.git
 
-Bei eurem DNS-Hoster (oder Cloudflare DNS, falls die Zone dort liegt):
-
-```
-umsetzung   CNAME   <project>.pages.dev
+# Coming-Soon-Stub auf GitHub überschreiben mit unserer Phase-B-History.
+# --force-with-lease ist sicherer als --force: bricht ab, wenn jemand
+# zwischenzeitlich auf origin gepusht hat.
+git push --force-with-lease origin main
 ```
 
-SSL-Zertifikat wird automatisch von Cloudflare ausgestellt
-(~5–10 min nach DNS-Propagierung).
+GitHub Pages baut auto in ~30 Sekunden, dann unter
+**`https://danielwalzer.github.io/umsetzungstool/`** erreichbar.
+
+**Wichtig — Subpath-Hosting**: GitHub Project-Pages servieren nicht aus
+dem Root, sondern aus `/umsetzungstool/`. Alle Pfade in `index.html`
+sind bereits relativ (`assets/logo.png`, nicht `/assets/logo.png`),
+funktionieren also out-of-the-box. **Nicht** auf absolute Pfade
+umstellen, sonst landen die Assets auf `danielwalzer.github.io/assets/…`
+→ 404.
+
+**Browser-Cache-Hinweis**: GitHub Pages hat einen aggressiven Edge-
+Cache. Nach jedem Push **Hard-Refresh** (CMD+SHIFT+R / Ctrl+F5),
+sonst sieht man die alte Version.
+
+### 7. 🟦 DNS-Migration (später, wenn Test grünes Licht)
+
+Erst wenn die Test-URL einmal sauber durchgespielt wurde, auf die
+finale Domain umstellen:
+
+1. **CNAME-File ins Repo legen**:
+   ```bash
+   echo 'umsetzung.result-lt.de' > CNAME
+   git add CNAME && git commit -m 'chore: enable custom domain' && git push
+   ```
+2. **GitHub Pages-Settings**: Repo → Settings → Pages → Custom Domain
+   → `umsetzung.result-lt.de` eintragen, „Enforce HTTPS" anhaken
+   (verfügbar nach Cert-Provisioning ~10 min).
+3. **DNS-Eintrag** bei eurem DNS-Hoster setzen lassen:
+   ```
+   umsetzung   CNAME   danielwalzer.github.io
+   ```
+4. **SeaTable-Formelspalten zurück auf finale Domain** umschreiben:
+   - `Workshops.FormUrl`: `"https://umsetzung.result-lt.de?workshop_id=" & rowid()`
+   - `Workshops.QrCodeImage`: QR-Code-URL mit obigem als Daten-Param
+5. **CORS-Header in den n8n-Workflows** auf `https://umsetzung.result-lt.de` eingrenzen (siehe Trouble-Shooting).
 
 ### 8. End-to-end-Test
 
