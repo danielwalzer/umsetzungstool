@@ -26,10 +26,25 @@ Token einmalig nach Erstellung kopieren → in `.env` als
 
 ## Workflow-Schritte (von `submit-handler.json` ausgeführt)
 
-1. **Contact upserten** — `PATCH /crm/v3/objects/contacts/{email}?idProperty=email`
-   mit Body `{ properties: { email, firstname, lastname, phone } }`. Liefert
-   `contactId` zurück. Properties-Update beschränkt sich bewusst auf
-   Standard-Felder; Workshop-/LIFO-Daten gehen ausschließlich in die Note.
+1. **Contact upserten** — `POST /crm/v3/objects/contacts/batch/upsert`
+   mit Body:
+   ```json
+   {
+     "inputs": [{
+       "idProperty": "email",
+       "id": "<email>",
+       "properties": { "email": "<email>", "firstname": "...", "lastname": "...", "phone": "..." }
+     }]
+   }
+   ```
+   Liefert `{ results: [{ id, properties, ... }] }` — Contact-ID via
+   `results[0].id`. Properties-Update beschränkt sich bewusst auf Standard-
+   Felder; Workshop-/LIFO-Daten gehen ausschließlich in die Note.
+
+   **Nicht** `PATCH /contacts/{email}?idProperty=email` verwenden — das macht
+   nur Update, kein Create, und liefert 404 wenn der Contact noch nicht
+   existiert. Die batch/upsert-Endpoint ist HubSpot's einziger echter
+   Upsert-Mechanismus.
 
 2. **Note anlegen + assoziieren** — `POST /crm/v3/objects/notes` mit Body:
 

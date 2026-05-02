@@ -109,8 +109,8 @@
     },
     {
       "parameters": {
-        "method": "PATCH",
-        "url": "=https://api.hubapi.com/crm/v3/objects/contacts/{{ encodeURIComponent($('Webhook').item.json.body.participant_email) }}?idProperty=email",
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -121,7 +121,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify((function(){\n  const fullName = ($('Webhook').item.json.body.participant_name || '').trim();\n  const parts = fullName.split(/\\s+/).filter(Boolean);\n  const firstname = parts.length >= 2 ? parts.slice(0, -1).join(' ') : fullName;\n  const lastname  = parts.length >= 2 ? parts[parts.length - 1] : '';\n  const props = {\n    email:     $('Webhook').item.json.body.participant_email,\n    firstname: firstname,\n    lastname:  lastname\n  };\n  const phone = $('Webhook').item.json.body.participant_phone;\n  if (phone) props.phone = phone;\n  return { properties: props };\n})()) }}",
+        "jsonBody": "={{ JSON.stringify((function(){\n  const fullName = ($('Webhook').item.json.body.participant_name || '').trim();\n  const parts = fullName.split(/\\s+/).filter(Boolean);\n  const firstname = parts.length >= 2 ? parts.slice(0, -1).join(' ') : fullName;\n  const lastname  = parts.length >= 2 ? parts[parts.length - 1] : '';\n  const email = $('Webhook').item.json.body.participant_email;\n  const props = {\n    email:     email,\n    firstname: firstname,\n    lastname:  lastname\n  };\n  const phone = $('Webhook').item.json.body.participant_phone;\n  if (phone) props.phone = phone;\n  return { inputs: [{ idProperty: 'email', id: email, properties: props }] };\n})()) }}",
         "options": {}
       },
       "id": "node-hs-upsert-006",
@@ -135,7 +135,7 @@
           "name": "HubSpot Private App Token (Header Auth: 'Authorization: Bearer <HUBSPOT_PRIVATE_APP_TOKEN>')"
         }
       },
-      "notes": "Upsert-Pattern via PATCH + idProperty=email. Updated nur Standard-Properties (firstname/lastname/phone) — keine Custom-Properties (Note-Strategie statt Property-Update, siehe setup/hubspot-note-template.md).\n\nName-Split-Heuristik: 'Anna Köhler' → firstname='Anna', lastname='Köhler'. 'Anna von der Mühlen' → firstname='Anna von der', lastname='Mühlen'. Single-Word ('Madonna') → firstname=full, lastname=''."
+      "notes": "Echter Upsert via POST /contacts/batch/upsert mit idProperty=email — PATCH /contacts/{email}?idProperty=email würde 404 liefern wenn der Contact noch nicht existiert (HubSpot's PATCH ist nur Update, kein Create). Updated nur Standard-Properties (firstname/lastname/phone) — keine Custom-Properties (Note-Strategie, siehe setup/hubspot-note-template.md).\n\nResponse-Shape: { results: [{ id, properties, ... }] }. Die Contact-ID wird in den nachfolgenden Nodes via results[0].id gelesen.\n\nName-Split-Heuristik: 'Anna Köhler' → firstname='Anna', lastname='Köhler'. 'Anna von der Mühlen' → firstname='Anna von der', lastname='Mühlen'. Single-Word ('Madonna') → firstname=full, lastname=''."
     },
     {
       "parameters": {
@@ -162,7 +162,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  properties: {\n    hs_timestamp: $('Build Note Body + Workshop-Context').item.json.hs_timestamp,\n    hs_note_body: $('Build Note Body + Workshop-Context').item.json.note_body\n  },\n  associations: [{\n    to: { id: $('HubSpot Upsert Contact').item.json.id },\n    types: [{\n      associationCategory: 'HUBSPOT_DEFINED',\n      associationTypeId: 202\n    }]\n  }]\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  properties: {\n    hs_timestamp: $('Build Note Body + Workshop-Context').item.json.hs_timestamp,\n    hs_note_body: $('Build Note Body + Workshop-Context').item.json.note_body\n  },\n  associations: [{\n    to: { id: $('HubSpot Upsert Contact').item.json.results[0].id },\n    types: [{\n      associationCategory: 'HUBSPOT_DEFINED',\n      associationTypeId: 202\n    }]\n  }]\n}) }}",
         "options": {}
       },
       "id": "node-hs-note-008",
@@ -191,7 +191,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify((function(){\n  const r = $('Create Submission Row').first().json;\n  const submissionId = (r && (r.row_ids && r.row_ids[0])) || (r && r.first_row && r.first_row._id) || (r && r._id);\n  return {\n    table_name: 'Submissions',\n    updates: [{\n      row_id: submissionId,\n      row: { HubspotContactId: $('HubSpot Upsert Contact').item.json.id }\n    }]\n  };\n})()) }}",
+        "jsonBody": "={{ JSON.stringify((function(){\n  const r = $('Create Submission Row').first().json;\n  const submissionId = (r && (r.row_ids && r.row_ids[0])) || (r && r.first_row && r.first_row._id) || (r && r._id);\n  return {\n    table_name: 'Submissions',\n    updates: [{\n      row_id: submissionId,\n      row: { HubspotContactId: $('HubSpot Upsert Contact').item.json.results[0].id }\n    }]\n  };\n})()) }}",
         "options": {}
       },
       "id": "node-update-submission-009",
