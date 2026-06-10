@@ -1,0 +1,176 @@
+{
+  "name": "Umsetzungstool — Rating Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "submit-rating",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "umsetzungstool-submit-rating",
+      "notes": "GET /webhook/submit-rating?id=<submission_row_id>&score=<1-10>\nWird von den 10 Bewertungs-Links in der review_3m-Mail aufgerufen.\nSpeichert UmsetzungsBewertung in der Submission-Zeile und antwortet mit einer Danke-Seite."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validiert Score (1–10) und sanitisiert die Submission-ID.\n// Fehlerhafte Parameter werden sofort mit einer Fehlerseite beantwortet.\n\nconst query  = $('Webhook').item.json.query || {};\nconst rawId  = String(query.id    || '').trim();\nconst rawScore = String(query.score || '').trim();\n\n// Submission-ID: nur SeaTable-Row-ID-Zeichen erlaubt\nconst id = rawId.replace(/[^A-Za-z0-9_-]/g, '');\n\n// Score: muss ganze Zahl 1–10 sein\nconst score = parseInt(rawScore, 10);\nconst valid = id.length > 0 && Number.isInteger(score) && score >= 1 && score <= 10;\n\nif (!valid) {\n  return [{\n    json: {\n      valid: false,\n      error: !id ? 'missing_id' : 'invalid_score',\n      id: '',\n      score: 0\n    }\n  }];\n}\n\nreturn [{ json: { valid: true, id, score } }];"
+      },
+      "id": "node-validate-002",
+      "name": "Validate Params",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "notes": "Sanitisiert id (nur [A-Za-z0-9_-]) und validiert score (Integer 1–10). Gibt valid:false zurück wenn Parameter fehlen oder ungültig."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "cond-valid",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-valid-003",
+      "name": "Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<!DOCTYPE html><html lang=\"de\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Ungültige Anfrage</title><style>body{margin:0;padding:0;background:#F0EBE7;font-family:Helvetica,Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;}div{background:#fff;border-radius:12px;padding:48px 40px;max-width:440px;text-align:center;}.b{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#0B3041;font-weight:700;margin-bottom:24px;}</style></head><body><div><div class=\"b\">result. learning &amp; transfer</div><p style=\"font-size:16px;color:#5A5A5A;\">Dieser Link ist ungültig oder abgelaufen.</p></div></body></html>",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "text/html; charset=utf-8" }
+            ]
+          },
+          "responseCode": 400
+        }
+      },
+      "id": "node-respond-error-004",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 180],
+      "notes": "400-Seite bei fehlendem/ungültigem id oder score."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://cloud.seatable.io/api/v2.1/dtable/app-access-token/",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "node-token-005",
+      "name": "Get Base Access Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 380],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "{{SEATABLE_CRED_ID}}",
+          "name": "SeaTable API Token (Header Auth)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://cloud.seatable.io/api-gateway/api/v2/dtables/36f34c52-dcdd-49a6-b414-976465d26ee4/rows/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $('Get Base Access Token').item.json.access_token }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  table_name: 'Submissions',\n  updates: [{\n    row_id: $('Validate Params').item.json.id,\n    row: { UmsetzungsBewertung: $('Validate Params').item.json.score }\n  }]\n}) }}",
+        "options": {}
+      },
+      "id": "node-update-006",
+      "name": "Update Submission Bewertung",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 380],
+      "continueOnFail": true,
+      "notes": "Schreibt UmsetzungsBewertung (1–10) in die Submissions-Zeile. continueOnFail=true: auch wenn das Update fehlschlägt, bekommt der Teilnehmer die Danke-Seite (bessere UX, kein HTTP-Error sichtbar)."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ (function(){\n  const score = $('Validate Params').item.json.score;\n  const bar = ['','▓','▓▓','▓▓▓','▓▓▓▓','▓▓▓▓▓','▓▓▓▓▓▓','▓▓▓▓▓▓▓','▓▓▓▓▓▓▓▓','▓▓▓▓▓▓▓▓▓','▓▓▓▓▓▓▓▓▓▓'][score] || '';\n  const color = score <= 2 ? '#B33A2A' : score <= 4 ? '#C77700' : score <= 6 ? '#E4A115' : score <= 8 ? '#5A9E44' : '#2E7D32';\n  return `<!DOCTYPE html><html lang=\"de\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Danke für deine Bewertung</title><style>*{box-sizing:border-box;}body{margin:0;padding:20px;background:#F0EBE7;font-family:Helvetica,Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;}.card{background:#fff;border-radius:12px;padding:48px 40px;max-width:440px;width:100%;text-align:center;}.brand{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#0B3041;font-weight:700;margin-bottom:32px;}.score{font-size:72px;font-weight:800;color:${color};line-height:1;margin:0 0 8px;}.label{font-size:13px;color:#5A5A5A;margin:0 0 28px;}h1{font-size:22px;font-weight:700;color:#1A1A1A;margin:0 0 12px;}p{font-size:15px;line-height:1.6;color:#5A5A5A;margin:0;}</style></head><body><div class=\"card\"><div class=\"brand\">result. learning &amp; transfer</div><div class=\"score\">${score}</div><div class=\"label\">von 10</div><h1>Danke für deine Bewertung!</h1><p>Deine Antwort wurde gespeichert und hilft deinem Trainer, die Wirkung des Workshops zu verstehen.</p></div></body></html>`;\n})() }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "text/html; charset=utf-8" },
+              { "name": "Cache-Control", "value": "no-store" }
+            ]
+          }
+        }
+      },
+      "id": "node-respond-thanks-007",
+      "name": "Respond Danke",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 380],
+      "notes": "Zeigt eine on-brand Danke-Seite mit der gewählten Bewertungszahl. Farbcodierung: rot (1–2), orange (3–4), gelb (5–6), hellgrün (7–8), dunkelgrün (9–10)."
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Validate Params", "type": "main", "index": 0 }]]
+    },
+    "Validate Params": {
+      "main": [[{ "node": "Valid?", "type": "main", "index": 0 }]]
+    },
+    "Valid?": {
+      "main": [
+        [{ "node": "Get Base Access Token", "type": "main", "index": 0 }],
+        [{ "node": "Respond Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Base Access Token": {
+      "main": [[{ "node": "Update Submission Bewertung", "type": "main", "index": 0 }]]
+    },
+    "Update Submission Bewertung": {
+      "main": [[{ "node": "Respond Danke", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  },
+  "active": false,
+  "tags": [
+    { "name": "umsetzungstool" }
+  ],
+  "$import_notes": [
+    "Vor dem Aktivieren in n8n:",
+    "1. {{SEATABLE_CRED_ID}} durch die echte n8n-Credential-ID ersetzen (dieselbe wie in den anderen Umsetzungstool-Workflows).",
+    "2. Workflow aktivieren → Produktions-Webhook-URL ist: https://<n8n>/webhook/submit-rating",
+    "3. Sicherstellen dass Submissions-Tabelle in SeaTable eine Spalte 'UmsetzungsBewertung' (Typ: number) hat.",
+    "4. Test: GET https://<n8n>/webhook/submit-rating?id=<echte_submission_id>&score=7",
+    "   → Browser zeigt Danke-Seite mit '7 von 10', SeaTable-Zeile hat UmsetzungsBewertung=7.",
+    "5. Test ungültig: GET .../submit-rating?id=&score=11 → 400-Fehlerseite."
+  ]
+}

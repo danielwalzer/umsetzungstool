@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<title>Wie gut hast du dein Vorhaben umgesetzt?</title>
+</head>
+<!--
+  Template: review_3m
+  Versand:  ~90 Tage (3 Monate) nach Submission
+  Tonality: Sachliche Bilanz. Bewertungsskala 1–10 als klickbare Links
+            (jeder Link trifft den rating-handler-Webhook und speichert
+            die Bewertung in Submissions.UmsetzungsBewertung).
+
+  Variablen:
+    {{FIRSTNAME}} {{FULLNAME}} {{WORKSHOP_NAME}} {{WORKSHOP_DATUM}}
+    {{VORHABEN_6W}} {{NAECHSTER_SCHRITT_72H}}
+    {{TRAINER_NAME}} {{TRAINER_EMAIL}} {{TRAINER_PHOTO_URL}}
+    {{TRAINER_SIGNATURE}}  ← rohes HTML, alle anderen werden HTML-escaped
+    {{SUBMISSION_ID}}      ← SeaTable Row-ID der Submission (für Rating-Links)
+-->
+<body style="margin:0;padding:0;background:#F0EBE7;font-family:Helvetica,Arial,sans-serif;color:#1A1A1A;-webkit-font-smoothing:antialiased;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F0EBE7;padding:32px 16px;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#FFFFFF;border-radius:12px;overflow:hidden;">
+
+        <!-- Brand-Band -->
+        <tr>
+          <td style="background:#0B3041;padding:18px 32px;">
+            <div style="font-size:11px;letter-spacing:0.10em;text-transform:uppercase;color:#5ABBEF;font-weight:700;">result. learning &amp; transfer</div>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:36px 32px 8px;">
+
+            <!-- Trainer-Identität -->
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+              <tr>
+                <td style="vertical-align:middle;padding-right:14px;">
+                  <img src="{{TRAINER_PHOTO_URL}}" alt="" width="56" height="56" style="border-radius:50%;display:block;border:2px solid #FFFFFF;">
+                </td>
+                <td style="vertical-align:middle;">
+                  <div style="font-size:11px;color:#5A5A5A;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;">3-Monats-Bilanz mit</div>
+                  <div style="font-size:16px;color:#1A1A1A;font-weight:700;line-height:1.3;margin-top:2px;">{{TRAINER_NAME}}</div>
+                </td>
+              </tr>
+            </table>
+
+            <h1 style="font-size:28px;line-height:1.2;font-weight:700;color:#1A1A1A;margin:0 0 16px;letter-spacing:-0.01em;">Wie gut hast du dein Vorhaben umgesetzt?</h1>
+
+            <p style="font-size:16px;line-height:1.6;margin:0 0 16px;">Hallo {{FIRSTNAME}},</p>
+
+            <p style="font-size:16px;line-height:1.6;margin:0 0 16px;">vor drei Monaten hast du dir nach dem Workshop <b>{{WORKSHOP_NAME}}</b> vorgenommen:</p>
+
+            <div style="border-left:3px solid #0074DA;background:#F2F8FD;padding:14px 18px;border-radius:0 8px 8px 0;margin:0 0 28px;">
+              <div style="font-size:16px;line-height:1.55;color:#1A1A1A;white-space:pre-wrap;">{{VORHABEN_6W}}</div>
+            </div>
+
+            <p style="font-size:17px;line-height:1.5;margin:0 0 6px;font-weight:600;">Wie gut hast du es umgesetzt — auf einer Skala von 1 bis 10?</p>
+            <p style="font-size:14px;line-height:1.5;color:#5A5A5A;margin:0 0 20px;">Ein Klick genügt. Deine Antwort hilft {{TRAINER_NAME}}, die Wirkung des Workshops zu verstehen.</p>
+
+            <!-- Bewertungsskala 1–10 -->
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 6px;">
+              <tr>
+                <td align="center" width="10%" style="padding:2px 2px;">
+                  <a href="https://n8n.srv1160374.hstgr.cloud/webhook/submit-rating?id={{SUBMISSION_ID}}&amp;score=1"
+                     style="display:block;background:#FFFFFF;border:2px solid #B33A2A;color:#B33A2A;text-decoration:none;padding:11px 2px;border-radius:7px;font-size:16px;font-weight:700;text-align:center;line-height:1;">1</a>
+                </td>
+                <td align="center" width="10%" style="padding:2px 2px;">
+                  <a href="https://n8n.srv1160374.hstgr.cloud/webhook/submit-rating?id={{SUBMISSION_ID}}&amp;score=2"
+                     style="display:block;background:#FFFFFF;border:2px solid #B33A2A;color:#B33A2A;text-decoration:none;padding:11px 2px;border-radius:7px;font-size:16px;font-weight:700;text-align:center;line-height:1;">2</a>
+                </td>
+                <td align="center" width="10%" style="padding:2px 2px;">
+                  <a href="https://n8n.srv1160374.hstgr.cloud/webhook/submit-rating?id={{SUBMISSION_ID}}&amp;score=3"
+                     style="display:block;background:#FFFFFF;border:2px solid #C77700;color:#C77700;text-decoration:none;padding:11px 2px;border-radius:7px;font-size:16px;font-weight:700;text-align:center;line-height:1;">3</a>
+                </td>
+                <td align="center" width="10%" style="padding:2px 2px;">
+                  <a href="https://n8n.srv1160374.hstgr.cloud/webhook/submit-rating?id={{SUBMISSION_ID}}&amp;score=4"
+                     style="display:block;background:#FFFFFF;border:2px solid #C77700;color:#C77700;text-decoration:none;padding:11px 2px;border-radius:7px;font-size:16px;font-weight:700;text-align:center;line-height:1;">4</a>
+                </td>
+                <td align="center" width="10%" style="padding:2px 2px;">
+                  <a href="https://n8n.srv1160374.hstgr.cloud/webhook/submit-rating?id={{SUBMISSION_ID}}&amp;score=5"
+                     style="display:block;background:#FFFFFF;border:2px solid #E4A115;color:#E4A115;text-decoration:none;padding:11px 2px;border-radius:7px;font-size:16px;font-weight:700;text-align:center;line-height:1;">5</a>
+                </td>
+                <td align="center" width="10%" style="padding:2px 2px;">
+                  <a href="https://n8n.srv1160374.hstgr.cloud/webhook/submit-rating?id={{SUBMISSION_ID}}&amp;score=6"
+                     style="display:block;background:#FFFFFF;border:2px solid #E4A115;color:#E4A115;text-decoration:none;padding:11px 2px;border-radius:7px;font-size:16px;font-weight:700;text-align:center;line-height:1;">6</a>
+                </td>
+                <td align="center" width="10%" style="padding:2px 2px;">
+                  <a href="https://n8n.srv1160374.hstgr.cloud/webhook/submit-rating?id={{SUBMISSION_ID}}&amp;score=7"
+                     style="display:block;background:#FFFFFF;border:2px solid #5A9E44;color:#5A9E44;text-decoration:none;padding:11px 2px;border-radius:7px;font-size:16px;font-weight:700;text-align:center;line-height:1;">7</a>
+                </td>
+                <td align="center" width="10%" style="padding:2px 2px;">
+                  <a href="https://n8n.srv1160374.hstgr.cloud/webhook/submit-rating?id={{SUBMISSION_ID}}&amp;score=8"
+                     style="display:block;background:#FFFFFF;border:2px solid #5A9E44;color:#5A9E44;text-decoration:none;padding:11px 2px;border-radius:7px;font-size:16px;font-weight:700;text-align:center;line-height:1;">8</a>
+                </td>
+                <td align="center" width="10%" style="padding:2px 2px;">
+                  <a href="https://n8n.srv1160374.hstgr.cloud/webhook/submit-rating?id={{SUBMISSION_ID}}&amp;score=9"
+                     style="display:block;background:#FFFFFF;border:2px solid #2E7D32;color:#2E7D32;text-decoration:none;padding:11px 2px;border-radius:7px;font-size:16px;font-weight:700;text-align:center;line-height:1;">9</a>
+                </td>
+                <td align="center" width="10%" style="padding:2px 2px;">
+                  <a href="https://n8n.srv1160374.hstgr.cloud/webhook/submit-rating?id={{SUBMISSION_ID}}&amp;score=10"
+                     style="display:block;background:#FFFFFF;border:2px solid #2E7D32;color:#2E7D32;text-decoration:none;padding:11px 2px;border-radius:7px;font-size:16px;font-weight:700;text-align:center;line-height:1;">10</a>
+                </td>
+              </tr>
+            </table>
+            <!-- Skalen-Labels -->
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 28px;">
+              <tr>
+                <td style="font-size:11px;color:#767676;text-align:left;padding:4px 4px 0;">gar nichts umgesetzt</td>
+                <td style="font-size:11px;color:#767676;text-align:right;padding:4px 4px 0;">im Rahmen meiner Möglichkeiten alles umgesetzt</td>
+              </tr>
+            </table>
+
+            <p style="font-size:15px;line-height:1.6;color:#5A5A5A;margin:0 0 16px;">Wenn du kurz erzählen magst, was gut lief oder was schwierig war — antworte einfach direkt auf diese Mail. Sie geht an <b style="color:#1A1A1A;">{{TRAINER_NAME}}</b>.</p>
+
+            <p style="font-size:16px;line-height:1.6;margin:24px 0 4px;">Danke und beste Grüße<br><b>{{TRAINER_NAME}}</b></p>
+
+            <!-- Trainer-Signatur -->
+            <div style="margin-top:24px;padding-top:20px;border-top:1px solid #E8E8E8;font-size:12px;color:#5A5A5A;line-height:1.5;">
+              {{TRAINER_SIGNATURE}}
+            </div>
+
+          </td>
+        </tr>
+
+        <!-- Footer-Band -->
+        <tr>
+          <td style="background:#F0EBE7;padding:16px 32px;font-size:11px;color:#767676;line-height:1.5;">
+            3-Monats-Bilanz zu deinem Vorhaben aus <b>{{WORKSHOP_NAME}}</b>.<br>
+            Antworte einfach direkt — sie geht an {{TRAINER_NAME}}.
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

@@ -85,12 +85,30 @@
           "name": "Status",
           "type": "single-select",
           "options": [
-            { "name": "active", "color": "#59CB74", "description": "Workshop ist im Webform-Dropdown auswählbar." },
-            { "name": "draft", "color": "#FFEAB6", "description": "Noch nicht freigegeben, taucht im Webform nicht auf." },
-            { "name": "archived", "color": "#CCCCCC", "description": "Abgeschlossen und ausgeblendet, Submissions bleiben referenzierbar." }
+            {
+              "name": "active",
+              "color": "#59CB74",
+              "description": "Workshop ist im Webform-Dropdown auswählbar."
+            },
+            {
+              "name": "draft",
+              "color": "#FFEAB6",
+              "description": "Noch nicht freigegeben, taucht im Webform nicht auf."
+            },
+            {
+              "name": "archived",
+              "color": "#CCCCCC",
+              "description": "Abgeschlossen und ausgeblendet, Submissions bleiben referenzierbar."
+            }
           ],
           "default": "draft",
           "description": "Sichtbarkeitsstatus des Workshops im Teilnehmer-Webform. Nur 'active' wird im Dropdown angezeigt."
+        },
+        {
+          "name": "HubspotSync",
+          "type": "checkbox",
+          "default": false,
+          "description": "Sollen Teilnehmer dieses Workshops in HubSpot synchronisiert werden? Wenn nicht gesetzt (Standard), gehen die Follow-up-Mails trotzdem raus, aber es wird kein HubSpot-Kontakt angelegt und keine Note geschrieben. Opt-in per Workshop, nicht global."
         }
       ]
     },
@@ -135,9 +153,18 @@
           "name": "LifoInteresse",
           "type": "single-select",
           "options": [
-            { "name": "ja", "color": "#59CB74" },
-            { "name": "vielleicht", "color": "#FFEAB6" },
-            { "name": "nein", "color": "#FFA89E" }
+            {
+              "name": "ja",
+              "color": "#59CB74"
+            },
+            {
+              "name": "vielleicht",
+              "color": "#FFEAB6"
+            },
+            {
+              "name": "nein",
+              "color": "#FFA89E"
+            }
           ],
           "description": "Antwort auf 'Möchtest du mit deinem LIFO-Profil weiterarbeiten?'. Nur sichtbar/befüllt, wenn der Workshop LifoVerwendet=true hat."
         },
@@ -155,6 +182,11 @@
           "name": "EingegangenAm",
           "type": "ctime",
           "description": "Zeitstempel, wann die Submission in SeaTable eingetroffen ist. SeaTable-System-Spalte 'Created time' – wird automatisch beim Insert gesetzt und ist read-only. Basis für SLA-Tracking."
+        },
+        {
+          "name": "UmsetzungsBewertung",
+          "type": "number",
+          "description": "Selbstbewertung des Teilnehmers, wie gut er sein Vorhaben umgesetzt hat (1 = gar nicht, 10 = vollständig). Wird über den Klick auf einen der 10 Buttons in der review_3m-Mail gesetzt (rating-handler-Webhook). Leer = noch keine Bewertung abgegeben."
         }
       ]
     },
@@ -179,10 +211,31 @@
           "name": "Type",
           "type": "single-select",
           "options": [
-            { "name": "thanks_24h", "color": "#A0E1E1", "description": "Dankes-Mail 24h nach Workshop-Datum." },
-            { "name": "followup_78h", "color": "#B5D9F5", "description": "Erinnerung an den 72h-Schritt, Versand 78h nach Workshop." },
-            { "name": "final_6w", "color": "#C8B6E2", "description": "Reflexions-Mail 6 Wochen nach Workshop, bezieht sich auf Vorhaben6W." },
-            { "name": "lifo_followup", "color": "#FFC1A8", "description": "LIFO-spezifischer Followup, nur bei LifoInteresse=ja oder vielleicht." }
+            {
+              "name": "thanks_24h",
+              "color": "#A0E1E1",
+              "description": "Dankes-Mail 24h nach Workshop-Datum."
+            },
+            {
+              "name": "followup_78h",
+              "color": "#B5D9F5",
+              "description": "Erinnerung an den 72h-Schritt, Versand 78h nach Workshop."
+            },
+            {
+              "name": "final_6w",
+              "color": "#C8B6E2",
+              "description": "Reflexions-Mail 6 Wochen nach Workshop, bezieht sich auf Vorhaben6W."
+            },
+            {
+              "name": "lifo_followup",
+              "color": "#FFC1A8",
+              "description": "LIFO-spezifischer Followup, nur bei LifoInteresse=ja oder vielleicht."
+            },
+            {
+              "name": "review_3m",
+              "color": "#FFD580",
+              "description": "3-Monats-Reflexionsmail mit Bewertungsskala 1–10. Versand 90 Tage nach Submission. Trigger: rating-handler-Webhook speichert Klick in Submissions.UmsetzungsBewertung."
+            }
           ],
           "description": "Art der Mail. Bestimmt Template, Platzhalter und ob bestimmte Felder gefüllt sein müssen."
         },
@@ -196,10 +249,26 @@
           "name": "Status",
           "type": "single-select",
           "options": [
-            { "name": "pending", "color": "#FFEAB6", "description": "Noch nicht versendet, wartet auf SendAt." },
-            { "name": "sent", "color": "#59CB74", "description": "Erfolgreich versendet, GraphMessageId und SentAt sind gesetzt." },
-            { "name": "failed", "color": "#FFA89E", "description": "Versand fehlgeschlagen, ErrorMessage enthält Details." },
-            { "name": "cancelled", "color": "#CCCCCC", "description": "Manuell oder automatisch abgebrochen (z.B. Teilnehmer abgemeldet)." }
+            {
+              "name": "pending",
+              "color": "#FFEAB6",
+              "description": "Noch nicht versendet, wartet auf SendAt."
+            },
+            {
+              "name": "sent",
+              "color": "#59CB74",
+              "description": "Erfolgreich versendet, GraphMessageId und SentAt sind gesetzt."
+            },
+            {
+              "name": "failed",
+              "color": "#FFA89E",
+              "description": "Versand fehlgeschlagen, ErrorMessage enthält Details."
+            },
+            {
+              "name": "cancelled",
+              "color": "#CCCCCC",
+              "description": "Manuell oder automatisch abgebrochen (z.B. Teilnehmer abgemeldet)."
+            }
           ],
           "default": "pending",
           "description": "Aktueller Versandstatus. Nur 'pending' wird vom n8n-Worker abgearbeitet."
