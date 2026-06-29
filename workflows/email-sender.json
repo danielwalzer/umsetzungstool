@@ -273,7 +273,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.microsoft.com/v1.0/users/umsetzung@result.de/sendMail",
+        "url": "=https://graph.microsoft.com/v1.0/users/{{ $json.reply_to }}/sendMail",
         "authentication": "genericCredentialType",
         "genericAuthType": "oAuth2Api",
         "sendHeaders": true,
